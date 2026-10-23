@@ -7,25 +7,26 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime
 
+from tksheet import Sheet
+
 from logic.settings_store import load_settings, save_settings
 from logic.metadata_store import save_metadata, ensure_metadata
 from logic.undo_stack import UndoStack
 from ui.searchbar import SearchBar
 from ui.theme import C
-from ui.tooltip import Tooltip, TreeHeadingTooltip
+from ui.tooltip import Tooltip
 
 
 MAX_COMMENT_CHARS  = 40
 ANIMATION_DURATION = 180   # ms
 ANIMATION_STEPS    = 12
 
-# Cap the number of rows actually inserted into the Treeview.  Tk's Treeview
-# is designed for hundreds of rows, not hundreds of thousands - inserting
-# 100k rows takes ~5 seconds and every keystroke triggers a full rebuild.
-# Capping at this many rows keeps every operation fast; users find what they
-# want by typing in the search bar rather than scrolling, so the cap is
-# rarely felt.  When more matches exist than fit, a hint near the table
-# tells the user how many were hidden.
+# Historically this capped how many rows were inserted into the ttk.Treeview,
+# which could not handle more than a few hundred without freezing.  The table
+# is now a virtualized tksheet.Sheet that draws only the on-screen rows, so the
+# entire filtered dictionary is shown at once and no cap is applied.  The
+# constant is retained (unused for capping) because tests and settings still
+# reference it.
 MAX_DISPLAY_ROWS = 500
 
 WRITTEN_NUMBERS = frozenset({
@@ -129,7 +130,14 @@ class DictionaryTab(ttk.Frame):
         # Session-only state
         self.bookmarked_stenos: set = set()
         self.conflict_stenos:   set = set()
-        self._page: int = 0   # current page for paginated treeview display
+
+        # Row-index highlight sets for the current view (indices into
+        # self.filtered_entries).  Recomputed on every _refresh_tree and
+        # re-applied to the sheet together with any active find highlights.
+        self._bm_rows:   list = []
+        self._cf_rows:   list = []
+        self._both_rows: list = []
+        self._find_rows: list = []
 
         # Undo / redo
         self._undo_stack = UndoStack()
@@ -188,8 +196,13 @@ class DictionaryTab(ttk.Frame):
         """Tab switch: sync column widths only — no row rebuild."""
         self.settings      = load_settings()
         self.column_widths = self.settings.get("column_widths", {})
-        for col in self.column_order:
-            self.tree.column(col, width=self.column_widths.get(col, self.DEFAULT_WIDTHS[col]))
+        if hasattr(self, "sheet"):
+            for i, col in enumerate(self.column_order):
+                self.sheet.column_width(
+                    i, self.column_widths.get(col, self.DEFAULT_WIDTHS[col]),
+                    redraw=False,
+                )
+            self.sheet.refresh()
         self._update_sort_headings()
 
     # ------------------------------------------------------------------
@@ -207,16 +220,26 @@ class DictionaryTab(ttk.Frame):
         return cols
 
     def _configure_columns(self):
-        """Apply column headers, widths, and anchors for the current column_order."""
-        self.tree.configure(columns=self.column_order)
-        for col in self.column_order:
-            self.tree.heading(
-                col, text=self.HEADINGS[col],
-                command=lambda c=col: self._sort_by(c),
-            )
-            width  = self.column_widths.get(col, self.DEFAULT_WIDTHS[col])
-            anchor = "w" if col in ("steno", "english", "comments") else "center"
-            self.tree.column(col, width=width, anchor=anchor, stretch=False)
+        """Apply headers, widths and alignment for the current column_order."""
+        if not hasattr(self, "sheet"):
+            return
+        self.sheet.headers([self.HEADINGS[c] for c in self.column_order])
+        for i, col in enumerate(self.column_order):
+            width = self.column_widths.get(col, self.DEFAULT_WIDTHS[col])
+            self.sheet.column_width(i, width, redraw=False)
+        # Left-align the text columns; centre the short metric columns.
+        left   = [i for i, c in enumerate(self.column_order)
+                  if c in ("steno", "english", "comments")]
+        centre = [i for i, c in enumerate(self.column_order)
+                  if c not in ("steno", "english", "comments")]
+        try:
+            if left:
+                self.sheet.align_columns(left, align="w", align_header=True)
+            if centre:
+                self.sheet.align_columns(centre, align="c", align_header=True)
+        except Exception:
+            pass
+        self._update_sort_headings()
 
     def _toggle_freq_column(self):
         """Show or hide the F column; sync to all other open tabs and persist."""
@@ -239,21 +262,20 @@ class DictionaryTab(ttk.Frame):
                     tab._apply_freq_column(show)
 
     def _apply_freq_column(self, show: bool):
-        """Rebuild column_order and reconfigure the Treeview accordingly."""
+        """Rebuild column_order and reconfigure the sheet accordingly."""
         self.column_order = self._make_column_order(show, self.focus_mode.get())
+        # Load the new-width data first so the sheet knows the new column
+        # count, then (re)apply headers / widths / alignment.
+        self._refresh_tree(reset_columns=True)
         self._configure_columns()
-        self._configure_tree_tags()
-        self._update_sort_headings()
-        self._refresh_tree()
 
     def _toggle_focus_mode(self):
         """Switch between the full editing table and a compact daily-editing view."""
         self.column_order = self._make_column_order(
             self.show_freq_column.get(), self.focus_mode.get()
         )
+        self._refresh_tree(reset_columns=True)
         self._configure_columns()
-        self._update_sort_headings()
-        self._refresh_tree()
         self._refresh_dictionary_header()
 
     # ------------------------------------------------------------------
@@ -287,19 +309,16 @@ class DictionaryTab(ttk.Frame):
     # ------------------------------------------------------------------
     # Find highlight support (used by FindReplaceDialog)
     # ------------------------------------------------------------------
-    def apply_find_highlights(self, item_ids: set):
-        """Add or remove the find_match tag from all visible rows."""
-        for item in self.tree.get_children():
-            tags = [t for t in self.tree.item(item, "tags") if t != "find_match"]
-            if item in item_ids:
-                tags.append("find_match")
-            self.tree.item(item, tags=tags)
+    def apply_find_highlights(self, rows):
+        """Highlight the given filtered-row indices as find matches."""
+        self._find_rows = sorted(r for r in rows
+                                 if 0 <= r < len(self.filtered_entries))
+        self._apply_row_highlights()
 
     def clear_find_highlights(self):
-        """Remove find_match tag from all rows."""
-        for item in self.tree.get_children():
-            tags = [t for t in self.tree.item(item, "tags") if t != "find_match"]
-            self.tree.item(item, tags=tags)
+        """Remove all find-match highlighting."""
+        self._find_rows = []
+        self._apply_row_highlights()
 
     # ------------------------------------------------------------------
     # Dictionary info (no longer a permanent header — info lives in the
@@ -722,94 +741,103 @@ class DictionaryTab(ttk.Frame):
         )
         # Don't pack the banner itself - shown on demand by _show_conflict_banner
 
-        # Pagination bar — hidden until filtered_entries exceed MAX_DISPLAY_ROWS.
-        # Shows "Showing X–Y of Z" plus Prev / Next buttons.
-        self._pagination_frame = ttk.Frame(self)
-        self._prev_btn = ttk.Button(
-            self._pagination_frame, text="◀ Prev",
-            style="Secondary.TButton",
-            command=self._go_prev_page,
-        )
-        self._prev_btn.pack(side=tk.LEFT, padx=(8, 4), pady=4)
-        self._page_label_var = tk.StringVar(value="")
-        ttk.Label(
-            self._pagination_frame,
-            textvariable=self._page_label_var,
-            foreground=C["fg_dim"],
-            anchor="center",
-        ).pack(side=tk.LEFT, fill=tk.X, expand=True, pady=4)
-        self._next_btn = ttk.Button(
-            self._pagination_frame, text="Next ▶",
-            style="Secondary.TButton",
-            command=self._go_next_page,
-        )
-        self._next_btn.pack(side=tk.RIGHT, padx=(4, 8), pady=4)
-        # Don't pack initially — shown on demand by _update_pagination
-
-        # Wrap tree+scrollbars in a grid so wide metadata columns can scroll
-        # horizontally instead of being squeezed or clipped.
+        # Table: a virtualized tksheet.Sheet replaces ttk.Treeview so the
+        # entire filtered dictionary (100k+ rows) can be shown at once with no
+        # pagination — only the on-screen cells are ever drawn.  It manages its
+        # own vertical and horizontal scrollbars.
         tree_frame = ttk.Frame(self)
         tree_frame.pack(fill=tk.BOTH, expand=True)
         tree_frame.rowconfigure(0, weight=1)
         tree_frame.columnconfigure(0, weight=1)
 
-        self.tree = ttk.Treeview(
+        self.sheet = Sheet(
             tree_frame,
-            columns=self.column_order,
-            show="headings",
-            selectmode="extended",
+            headers=[self.HEADINGS[c] for c in self.column_order],
+            data=[],
+            theme="dark",
+            show_row_index=False,
+            header_font=("Segoe UI", 10, "bold"),
+            font=("Segoe UI", 10, "normal"),
+            default_column_width=120,
+            alternate_color=C["bg_alt"],
+            outline_thickness=0,
+        )
+        self.sheet.grid(row=0, column=0, sticky="nsew")
+
+        # Read-only but fully navigable: no cell-editing bindings are enabled,
+        # so the user can select, scroll, resize columns and copy, but not edit
+        # in place (edits go through the dialogs, as before).
+        self.sheet.enable_bindings(
+            "single_select", "row_select", "drag_select",
+            "arrowkeys", "column_width_resize", "double_click_column_resize",
+            "copy",
         )
 
         self._configure_columns()
-
-        # --- Tags (later tags take priority when multiple are applied) ---
-        # Colours pulled from the live palette so they update on theme switch.
         self._configure_tree_tags()
 
-        ysb = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.tree.yview)
-        xsb = ttk.Scrollbar(tree_frame, orient=tk.HORIZONTAL, command=self.tree.xview)
-        self.tree.configure(yscroll=ysb.set, xscroll=xsb.set)
-        self.tree.grid(row=0, column=0, sticky="nsew")
-        ysb.grid(row=0, column=1, sticky="ns")
-        xsb.grid(row=1, column=0, sticky="ew")
-
-        self.tree.bind("<ButtonRelease-1>", self._on_click)
-        self.tree.bind("<ButtonRelease-1>", self._save_column_widths, add="+")
-        self.tree.bind("<Double-1>",        self._on_double_click)
-        self.tree.bind("<Return>",          self._on_enter)
-        self.tree.bind("<Control-e>",       self._on_ctrl_e)
-        self.tree.bind("<Delete>",          lambda e: self.delete_selected())
-        self.tree.bind("<Button-3>",        self._on_right_click)
-
-        # Friendly hover tooltips on the cryptic column headings (S, W, B, F).
-        self._heading_tooltip = TreeHeadingTooltip(self.tree, self.COLUMN_TOOLTIPS)
+        # Map the old Treeview interactions onto the sheet.
+        self.sheet.extra_bindings("column_select",       self._on_header_click)
+        self.sheet.extra_bindings("column_width_resize", self._on_column_resized)
+        self.sheet.MT.bind("<Double-Button-1>", self._on_double_click, add="+")
+        self.sheet.MT.bind("<Button-3>",        self._on_right_click,  add="+")
+        self.sheet.MT.bind("<Return>",          self._on_enter,        add="+")
+        self.sheet.MT.bind("<Control-e>",       self._on_ctrl_e,       add="+")
+        self.sheet.MT.bind("<Delete>", lambda e: self.delete_selected(), add="+")
 
     def _configure_tree_tags(self):
-        """Apply tree row tags from the live palette.  Re-callable on theme switch."""
-        self.tree.tag_configure("row_even", background=C["bg_panel"])
-        self.tree.tag_configure("row_odd",  background=C["bg_alt"])
-        self.tree.tag_configure(
-            "bookmarked",
-            background=C["bookmark_bg"], foreground=C["bookmark_fg"]
+        """Apply sheet colours from the live palette.  Re-callable on theme
+        switch.  Per-row state colours (bookmark / conflict / find) are applied
+        separately in _apply_row_highlights; zebra striping is handled by the
+        sheet's alternate_color option."""
+        if not hasattr(self, "sheet"):
+            return
+        self.sheet.set_options(
+            table_bg=C["bg_panel"], table_fg=C["fg"],
+            header_bg=C["bg_panel"], header_fg=C["fg_dim"],
+            table_grid_fg=C["border"], header_grid_fg=C["border"],
+            index_bg=C["bg_panel"], index_fg=C["fg_dim"], index_grid_fg=C["border"],
+            table_selected_cells_bg=C["accent"], table_selected_cells_fg="white",
+            table_selected_rows_bg=C["accent"], table_selected_rows_fg="white",
+            table_selected_columns_bg=C["accent"], table_selected_columns_fg="white",
+            table_selected_box_cells_fg=C["accent_hover"],
+            frame_bg=C["bg_panel"], outline_color=C["border"],
+            alternate_color=C["bg_alt"],
+            redraw=False,
         )
-        self.tree.tag_configure(
-            "conflict",
-            background=C["conflict_bg"], foreground=C["conflict_fg"]
-        )
-        self.tree.tag_configure(
-            "bookmarked_conflict",
-            background=C["bookmarked_conflict_bg"],
-            foreground=C["bookmarked_conflict_fg"]
-        )
-        self.tree.tag_configure(
-            "find_match",
-            background=C["find_match_bg"], foreground=C["find_match_fg"]
-        )
+
+    # ------------------------------------------------------------------
+    # Row highlighting (bookmark / conflict / find)
+    # ------------------------------------------------------------------
+    def _apply_row_highlights(self, redraw: bool = True):
+        """Re-apply all per-row state highlights to the sheet.
+
+        Order matters: bookmark/conflict first, find-matches on top so they
+        win when a row is both — mirroring the old Treeview tag priority."""
+        if not hasattr(self, "sheet"):
+            return
+        self.sheet.dehighlight_all(redraw=False)
+        if self._bm_rows:
+            self.sheet.highlight_rows(self._bm_rows, bg=C["bookmark_bg"],
+                                      fg=C["bookmark_fg"], redraw=False)
+        if self._cf_rows:
+            self.sheet.highlight_rows(self._cf_rows, bg=C["conflict_bg"],
+                                      fg=C["conflict_fg"], redraw=False)
+        if self._both_rows:
+            self.sheet.highlight_rows(self._both_rows,
+                                      bg=C["bookmarked_conflict_bg"],
+                                      fg=C["bookmarked_conflict_fg"], redraw=False)
+        if self._find_rows:
+            self.sheet.highlight_rows(self._find_rows, bg=C["find_match_bg"],
+                                      fg=C["find_match_fg"], redraw=False)
+        if redraw:
+            self.sheet.refresh()
 
     def refresh_theme(self):
         """Re-apply colour-dependent settings after a theme switch."""
-        if hasattr(self, "tree"):
+        if hasattr(self, "sheet"):
             self._configure_tree_tags()
+            self._apply_row_highlights()
         # Conflict banner uses palette colours; recolour if currently shown
         if hasattr(self, "_conflict_banner_label"):
             try:
@@ -817,14 +845,6 @@ class DictionaryTab(ttk.Frame):
                     background=C["conflict_bg"], foreground=C["conflict_fg"])
                 self._conflict_banner_close.configure(
                     background=C["conflict_bg"], foreground=C["conflict_fg"])
-            except (tk.TclError, AttributeError):
-                pass
-        # Pagination label uses fg_dim
-        if hasattr(self, "_pagination_frame"):
-            try:
-                for child in self._pagination_frame.winfo_children():
-                    if isinstance(child, ttk.Label):
-                        child.configure(foreground=C["fg_dim"])
             except (tk.TclError, AttributeError):
                 pass
         self._refresh_dictionary_header()
@@ -862,12 +882,11 @@ class DictionaryTab(ttk.Frame):
         self._apply_filters()
 
     def edit_selected_entry(self, updated_entry):
-        selected = self.tree.selection()
-        if not selected:
+        rows = self._selected_rows()
+        if not rows:
             return
-        # Locate the exact entry represented by the visible row.  Pagination
-        # means tree row 0 is not always filtered_entries[0].
-        target = self._entry_for_tree_item(selected[0])
+        # Locate the exact entry object represented by the selected row.
+        target = self._entry_for_row(rows[0])
         if target is None:
             return
         old_steno = target["steno"]
@@ -958,10 +977,9 @@ class DictionaryTab(ttk.Frame):
     # Bookmarks (session-only)
     # ------------------------------------------------------------------
     def toggle_bookmark_selected(self):
-        selected = self.tree.selection()
-        if not selected:
+        stenos = self._selected_stenos()
+        if not stenos:
             return
-        stenos = self._stenos_for_items(selected)
         all_bm = all(s in self.bookmarked_stenos for s in stenos)
         if all_bm:
             self.bookmarked_stenos -= stenos
@@ -973,12 +991,12 @@ class DictionaryTab(ttk.Frame):
     # Delete
     # ------------------------------------------------------------------
     def delete_selected(self, confirm=True):
-        selected = self.tree.selection()
+        selected = self._selected_entries()
         if not selected:
             return
         if confirm:
             n     = len(selected)
-            label = (f'"{dict(zip(self.column_order, self.tree.item(selected[0], "values")))["steno"]}"'
+            label = (f'"{selected[0]["steno"]}"'
                      if n == 1 else f"{n} selected entries")
             if not messagebox.askyesno("Delete", f"Delete {label}?"):
                 return
@@ -987,11 +1005,7 @@ class DictionaryTab(ttk.Frame):
         # (steno, english) pair.  When two entries genuinely share the
         # same steno+english (a literal duplicate), pair-based identity
         # can't tell which row the user actually clicked.
-        targets = set()
-        for iid in selected:
-            entry = self._entry_for_tree_item(iid)
-            if entry is not None:
-                targets.add(id(entry))
+        targets = {id(e) for e in selected}
 
         if not targets:
             return
@@ -1160,13 +1174,12 @@ class DictionaryTab(ttk.Frame):
     # Right-click context menu
     # ------------------------------------------------------------------
     def _on_right_click(self, event):
-        item = self.tree.identify_row(event.y)
-        if not item:
+        row = self.sheet.identify_row(event)
+        if row is None:
             return
-        if item not in self.tree.selection():
-            self.tree.selection_set(item)
-        selected = self.tree.selection()
-        n = len(selected)
+        if row not in self._selected_rows():
+            self._select_rows([row])
+        n = len(self._selected_rows())
 
         menu = tk.Menu(self, tearoff=0)
         if n == 1:
@@ -1203,10 +1216,8 @@ class DictionaryTab(ttk.Frame):
 
     def _copy_selected_to(self, target_tab):
         payload = []
-        for item in self.tree.selection():
-            entry = self._entry_for_tree_item(item)
-            if entry:
-                payload.append((entry, (self.metadata or {}).get(entry["steno"], {})))
+        for entry in self._selected_entries():
+            payload.append((entry, (self.metadata or {}).get(entry["steno"], {})))
         target_tab.receive_entries(payload)
 
     def _move_selected_to(self, target_tab):
@@ -1216,35 +1227,79 @@ class DictionaryTab(ttk.Frame):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
-    def _stenos_for_items(self, items) -> set:
-        return {
-            dict(zip(self.column_order, self.tree.item(i, "values")))["steno"]
-            for i in items
-        }
-
-    def _entry_for_tree_item(self, item):
-        """Return the filtered entry represented by a visible Treeview item."""
-        children = self.tree.get_children()
+    def _selected_rows(self) -> list:
+        """Sorted list of selected row indices (indices into filtered_entries)."""
+        if not hasattr(self, "sheet"):
+            return []
         try:
-            visible_idx = children.index(item)
-        except ValueError:
-            return None
-        filtered_idx = self._page * MAX_DISPLAY_ROWS + visible_idx
-        if filtered_idx >= len(self.filtered_entries):
-            return None
-        return self.filtered_entries[filtered_idx]
+            return sorted(self.sheet.get_selected_rows())
+        except Exception:
+            return []
+
+    def _entry_for_row(self, row):
+        """Return the filtered entry at a sheet row index, or None."""
+        if 0 <= row < len(self.filtered_entries):
+            return self.filtered_entries[row]
+        return None
+
+    def _selected_entries(self) -> list:
+        return [self.filtered_entries[r] for r in self._selected_rows()
+                if 0 <= r < len(self.filtered_entries)]
+
+    def _selected_stenos(self) -> set:
+        return {e["steno"] for e in self._selected_entries()}
+
+    def selected_entries(self) -> list:
+        """Public: filtered entries for the current selection (used by dialogs)."""
+        return self._selected_entries()
+
+    def _select_rows(self, rows):
+        """Replace the selection with the given row indices and scroll to the
+        first one."""
+        if not hasattr(self, "sheet"):
+            return
+        rows = sorted(r for r in rows if 0 <= r < len(self.filtered_entries))
+        self.sheet.deselect("all", redraw=False)
+        for i, r in enumerate(rows):
+            self.sheet.add_row_selection(
+                r, redraw=False, run_binding_func=False, set_as_current=(i == 0)
+            )
+        if rows:
+            self.sheet.see(rows[0], redraw=False)
+        self.sheet.refresh()
+
+    def select_and_see_row(self, row):
+        """Public: select a single filtered-row index and scroll it into view."""
+        self._select_rows([row])
 
     # ------------------------------------------------------------------
     # Selection handlers
     # ------------------------------------------------------------------
-    def _on_click(self, event=None):
-        if self.tree.identify("region", event.x, event.y) == "heading":
-            return
-
     def _on_double_click(self, event=None): self._open_edit_dialog_for_selected()
     def _on_enter(self,        event=None): self._open_edit_dialog_for_selected()
     def _on_ctrl_e(self,       event=None): self._open_edit_dialog_for_selected()
     def toolbar_edit(self):                 self._open_edit_dialog_for_selected()
+
+    # ------------------------------------------------------------------
+    # Header click → sort;  column resize → persist widths
+    # ------------------------------------------------------------------
+    def _on_header_click(self, event=None):
+        """Clicking a column header sorts by that column (toggling direction)."""
+        col_idx = None
+        try:
+            col_idx = event.selected.column
+        except Exception:
+            try:
+                col_idx = event["selected"].column
+            except Exception:
+                col_idx = None
+        if col_idx is None or not (0 <= col_idx < len(self.column_order)):
+            return
+        self._sort_by(self.column_order[col_idx])
+        self.sheet.deselect("all", redraw=True)
+
+    def _on_column_resized(self, event=None):
+        self._save_column_widths()
 
     # ------------------------------------------------------------------
     # Filters + search
@@ -1262,8 +1317,8 @@ class DictionaryTab(ttk.Frame):
         - Punctuation regex is compiled once and cached on the class.
         """
         # Guard: this may be called via StringVar trace during __init__ before
-        # the Treeview is built.  Nothing to do yet in that case.
-        if not hasattr(self, "tree"):
+        # the sheet is built.  Nothing to do yet in that case.
+        if not hasattr(self, "sheet"):
             return
         self._refresh_filter_chips()
 
@@ -1329,9 +1384,6 @@ class DictionaryTab(ttk.Frame):
             top_n_stenos = {steno for steno, score in scored[:top_n] if score > 0}
         else:
             top_n_stenos = None
-
-        # Any filter change goes back to the first page.
-        self._page = 0
 
         results = []
         for entry in self.entries:
@@ -1496,56 +1548,56 @@ class DictionaryTab(ttk.Frame):
         self._refresh_tree()
         self._update_sort_headings()
 
+    def _heading_text(self, col) -> str:
+        base = self.HEADINGS[col]
+        if col == self.sort_column:
+            return f"{base} {'▼' if self.sort_reverse else '▲'}"
+        return base
+
     def _update_sort_headings(self):
-        for col in self.column_order:
-            base = self.HEADINGS[col]
-            text = (f"{base} {'▼' if self.sort_reverse else '▲'}"
-                    if col == self.sort_column else base)
-            self.tree.heading(col, text=text, command=lambda c=col: self._sort_by(c))
+        if not hasattr(self, "sheet"):
+            return
+        self.sheet.set_header_data(
+            [self._heading_text(c) for c in self.column_order]
+        )
 
     # ------------------------------------------------------------------
     # Tree refresh (zebra stripes + tags)
     # ------------------------------------------------------------------
-    def _refresh_tree(self):
+    def _refresh_tree(self, reset_columns: bool = False):
         """
-        Rebuild the visible tree from self.filtered_entries.
+        Rebuild the sheet from self.filtered_entries.
 
-        Performance:
-        - Caps inserted rows at MAX_DISPLAY_ROWS (users find their target
-          by searching, not scrolling, so the cap is rarely felt).
-        - Fingerprints the slice that's about to be drawn and skips the
-          rebuild entirely if the same page is already on screen.
-        - Hoists everything possible out of the per-row loop; column row
-          tuples are built positionally to avoid intermediate dicts.
+        The sheet is virtualized, so every filtered row is loaded (no cap, no
+        pagination) and only the on-screen cells are drawn.  The full row
+        matrix is built in Python and handed to the sheet in one call; the
+        bookmark / conflict row-index sets are computed in the same pass and
+        applied as highlights (zebra striping is the sheet's alternate_color).
+
+        reset_columns=True recreates the column positions, which is required
+        when the number of columns changes (freq / focus toggle); normal
+        refreshes keep them so user-resized widths survive searches.
         """
-        # Clamp the page to the valid range in case filtered_entries shrank
-        # (e.g. after a search that returns fewer results than the current page).
-        max_page = max(0, (len(self.filtered_entries) - 1) // MAX_DISPLAY_ROWS)
-        self._page = min(self._page, max_page)
+        if not hasattr(self, "sheet"):
+            return
 
-        start  = self._page * MAX_DISPLAY_ROWS
-        capped = self.filtered_entries[start:start + MAX_DISPLAY_ROWS]
+        prev_selected = self._selected_stenos()
 
-        prev_selected = self._stenos_for_items(self.tree.selection())
-
-        # Hoist locals — measurable on 100k-entry dictionaries.
-        tree              = self.tree
-        tree_insert       = tree.insert
-        END               = tk.END
         metadata          = self.metadata or {}
         bookmarked_stenos = self.bookmarked_stenos
         conflict_stenos   = self.conflict_stenos
         max_chars         = MAX_COMMENT_CHARS
         cols_tuple        = tuple(self.column_order)
-        # Column → row-tuple index mapping built once for this render.
-        col_indexes = {c: i for i, c in enumerate(cols_tuple)}
-        n_cols = len(cols_tuple)
+        n_cols            = len(cols_tuple)
 
-        tree.delete(*tree.get_children())
+        rows        = []
+        bm_rows     = []
+        cf_rows     = []
+        both_rows   = []
         to_reselect = []
+        empty_meta  = {}
 
-        empty_meta = {}
-        for i, entry in enumerate(capped):
+        for i, entry in enumerate(self.filtered_entries):
             steno   = entry["steno"]
             english = entry.get("english") or ""
             meta    = metadata.get(steno, empty_meta)
@@ -1556,9 +1608,8 @@ class DictionaryTab(ttk.Frame):
 
             freq = meta.get("frequency", 0)
 
-            # Build the row tuple positionally for the current column order.
             row = [""] * n_cols
-            for col, idx in col_indexes.items():
+            for idx, col in enumerate(cols_tuple):
                 if col == "steno":
                     row[idx] = steno
                 elif col == "english":
@@ -1577,28 +1628,33 @@ class DictionaryTab(ttk.Frame):
                     row[idx] = meta.get("modified", entry.get("modified", ""))
                 elif col == "comments":
                     row[idx] = comments
+            rows.append(row)
 
-            # Build tag list — later tags override earlier ones
-            if steno in bookmarked_stenos:
-                if steno in conflict_stenos:
-                    tag = "bookmarked_conflict"
-                else:
-                    tag = "bookmarked"
-            elif steno in conflict_stenos:
-                tag = "conflict"
-            else:
-                tag = "row_odd" if i & 1 else "row_even"
-            tags = (tag,)
+            is_bm = steno in bookmarked_stenos
+            is_cf = steno in conflict_stenos
+            if is_bm and is_cf:
+                both_rows.append(i)
+            elif is_bm:
+                bm_rows.append(i)
+            elif is_cf:
+                cf_rows.append(i)
 
-            iid = tree_insert("", END, values=row, tags=tags)
             if steno in prev_selected:
-                to_reselect.append(iid)
+                to_reselect.append(i)
+
+        self.sheet.set_sheet_data(
+            rows, reset_highlights=True, redraw=False,
+            reset_col_positions=reset_columns, reset_row_positions=True,
+        )
+        self._bm_rows, self._cf_rows, self._both_rows = bm_rows, cf_rows, both_rows
+        # A fresh data set drops any stale find highlights.
+        self._find_rows = []
+        self._apply_row_highlights(redraw=False)
 
         if to_reselect:
-            tree.selection_set(to_reselect)
-
-        # Update the pagination bar
-        self._update_pagination()
+            self._select_rows(to_reselect)
+        else:
+            self.sheet.refresh()
 
     # ------------------------------------------------------------------
     # Conflict warning banner
@@ -1653,55 +1709,20 @@ class DictionaryTab(ttk.Frame):
         return after - before
 
     # ------------------------------------------------------------------
-    # Pagination
-    # ------------------------------------------------------------------
-    def _go_prev_page(self):
-        if self._page > 0:
-            self._page -= 1
-            self._refresh_tree()
-
-    def _go_next_page(self):
-        max_page = max(0, (len(self.filtered_entries) - 1) // MAX_DISPLAY_ROWS)
-        if self._page < max_page:
-            self._page += 1
-            self._refresh_tree()
-
-    def _update_pagination(self):
-        """Show/hide the pagination bar and update its label and button states."""
-        total = len(self.filtered_entries)
-        if total <= MAX_DISPLAY_ROWS:
-            self._pagination_frame.pack_forget()
-            return
-
-        max_page = (total - 1) // MAX_DISPLAY_ROWS
-        start    = self._page * MAX_DISPLAY_ROWS + 1
-        end      = min(start + MAX_DISPLAY_ROWS - 1, total)
-        self._page_label_var.set(f"Showing {start:,}–{end:,} of {total:,}")
-        self._prev_btn.configure(state="normal" if self._page > 0        else "disabled")
-        self._next_btn.configure(state="normal" if self._page < max_page else "disabled")
-
-        if not self._pagination_frame.winfo_ismapped():
-            self._pagination_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(2, 0))
-
-    # ------------------------------------------------------------------
     # Column width persistence
     # ------------------------------------------------------------------
     def _save_column_widths(self, event=None):
-        # Only persist widths when the user drags a column sash (separator).
-        # Firing on every row click was causing load_settings + save_settings
-        # to run on each click, which is wasteful.
-        if event is not None:
-            region = self.tree.identify("region", event.x, event.y)
-            if region != "separator":
-                return
-        self.after(50, self._do_save_column_widths)
-
-    def _do_save_column_widths(self):
+        """Persist current sheet column widths.  Called when the user finishes
+        dragging a column border (the column_width_resize binding)."""
+        if not hasattr(self, "sheet"):
+            return
         try:
-            for col in self.column_order:
-                self.column_widths[col] = self.tree.column(col, "width")
+            widths = self.sheet.get_column_widths()
         except Exception:
             return
+        for i, col in enumerate(self.column_order):
+            if i < len(widths):
+                self.column_widths[col] = int(widths[i])
         settings = load_settings()
         settings["column_widths"] = self.column_widths
         save_settings(settings)
@@ -1711,18 +1732,11 @@ class DictionaryTab(ttk.Frame):
     # Details dialog
     # ------------------------------------------------------------------
     def _open_details_dialog_for_selected(self):
-        selected = self.tree.selection()
-        if not selected:
-            return
-        row    = dict(zip(self.column_order, self.tree.item(selected[0], "values")))
-        steno  = row["steno"]
-        english = row["english"]
-        entry  = next(
-            (e for e in self.entries if e["steno"] == steno and e["english"] == english),
-            None,
-        )
+        entry = self._entry_for_row(next(iter(self._selected_rows()), -1))
         if entry is None:
             return
+        steno   = entry["steno"]
+        english = entry.get("english") or ""
 
         dlg = tk.Toplevel(self)
         dlg.title("Entry Details")
@@ -1770,10 +1784,10 @@ class DictionaryTab(ttk.Frame):
     # Edit / Add dialog
     # ------------------------------------------------------------------
     def _open_edit_dialog_for_selected(self):
-        selected = self.tree.selection()
-        if not selected:
+        rows = self._selected_rows()
+        if not rows:
             return
-        entry = self._entry_for_tree_item(selected[0])
+        entry = self._entry_for_row(rows[0])
         if entry is None:
             return
         self._open_edit_dialog(entry)

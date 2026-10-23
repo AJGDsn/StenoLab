@@ -142,8 +142,8 @@ class FindReplaceDialog(tk.Toplevel):
         pattern = re.compile(re.escape(find_text), flags)
 
         matches = [
-            item for item in tab.tree.get_children()
-            if self._row_matches(tab, item, pattern, field)
+            i for i, entry in enumerate(tab.filtered_entries)
+            if self._row_matches(tab, entry, pattern, field)
         ]
 
         self._matches   = matches
@@ -162,11 +162,10 @@ class FindReplaceDialog(tk.Toplevel):
         self._match_idx = -1
         self.status_label.config(text="")
 
-    def _row_matches(self, tab, item, pattern, field):
-        row = dict(zip(tab.column_order, tab.tree.item(item, "values")))
-        if field in ("Translation", "Both") and pattern.search(row.get("english", "")):
+    def _row_matches(self, tab, entry, pattern, field):
+        if field in ("Translation", "Both") and pattern.search(entry.get("english") or ""):
             return True
-        if field in ("Steno",       "Both") and pattern.search(row.get("steno", "")):
+        if field in ("Steno",       "Both") and pattern.search(entry.get("steno", "")):
             return True
         return False
 
@@ -193,9 +192,8 @@ class FindReplaceDialog(tk.Toplevel):
         tab = self.get_tab()
         if not tab or not self._matches:
             return
-        item = self._matches[self._match_idx]
-        tab.tree.selection_set(item)
-        tab.tree.see(item)
+        row = self._matches[self._match_idx]
+        tab.select_and_see_row(row)
         n   = len(self._matches)
         idx = self._match_idx + 1
         self.status_label.config(text=f"{idx} of {n} match{'es' if n != 1 else ''}")
@@ -217,14 +215,13 @@ class FindReplaceDialog(tk.Toplevel):
         flags   = 0 if self.case_var.get() else re.IGNORECASE
         pattern = re.compile(re.escape(find_text), flags)
 
-        selected = tab.tree.selection()
+        selected = tab.selected_entries()
         if not selected:
             self._find_next()
             return
 
-        item = selected[0]
-        row  = dict(zip(tab.column_order, tab.tree.item(item, "values")))
-        steno, english = row["steno"], row["english"]
+        entry = selected[0]
+        steno, english = entry["steno"], entry.get("english") or ""
         modified = False
 
         if field in ("Translation", "Both"):
