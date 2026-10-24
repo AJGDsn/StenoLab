@@ -1227,10 +1227,20 @@ class DictionaryTab(ttk.Frame):
             menu.grab_release()
 
     def _get_other_tabs(self) -> dict:
+        """Other open tabs keyed by menu label: the tab name, plus its folder
+        when two open dictionaries share a name."""
         app = self.winfo_toplevel()
         if not hasattr(app, "tabs"):
             return {}
-        return {n: t for n, t in app.tabs.items() if t is not self}
+        others = [t for t in app.tabs.values() if t is not self]
+        names = [t.name for t in app.tabs.values()]
+        labels = {}
+        for tab in others:
+            label = tab.name
+            if names.count(tab.name) > 1 and tab.dict_path:
+                label = f"{tab.name}  ({os.path.basename(os.path.dirname(tab.dict_path))})"
+            labels[label] = tab
+        return labels
 
     def _copy_selected_to(self, target_tab, label="Copy Entries"):
         payload = []
@@ -1913,17 +1923,29 @@ class DictionaryTab(ttk.Frame):
         bf = ttk.Frame(con)
         bf.grid(row=6, column=0, columnspan=2, pady=(10, 0), sticky="e")
 
+        # The validator knows Plover's English layout only, so a failure is a
+        # warning: pressing Save again with the same steno keeps it.  This is
+        # what lets Palantype and other CAT systems' entries be edited.
+        warned_for = {"steno": None}
+
         def on_save():
-            # Validate steno before doing anything destructive.  Show error
-            # inline (with a red border on the field) and abort save if invalid.
             from logic.steno_validator import validate_steno
             steno_input = steno_var.get().strip()
-            ok, msg = validate_steno(steno_input)
-            if not ok:
-                steno_error_var.set(msg)
+            if not steno_input:
+                steno_error_var.set("Steno cannot be empty.")
                 steno_entry.state(["invalid"])
                 steno_entry.focus_set()
                 return
+            # An unchanged steno was accepted when it was first written; only
+            # check new or changed ones.
+            if is_new or steno_input != entry.get("steno"):
+                ok, msg = validate_steno(steno_input)
+                if not ok and warned_for["steno"] != steno_input:
+                    warned_for["steno"] = steno_input
+                    steno_error_var.set(f"{msg}  Press Save again to keep it anyway.")
+                    steno_entry.state(["invalid"])
+                    steno_entry.focus_set()
+                    return
             steno_error_var.set("")
             steno_entry.state(["!invalid"])
 

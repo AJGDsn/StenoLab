@@ -197,3 +197,44 @@ def test_replacement_text_is_inserted_exactly_as_typed(root, tmp_path):
         dlg.destroy()
 
     assert tab.entries[0]["english"] == r"test\d\1{^\n^}"
+
+
+def _error_text(tab):
+    dlg = [w for w in tab.winfo_children() if isinstance(w, tk.Toplevel)][-1]
+    return next(w for w in _widgets(dlg) if w.winfo_class() == "TLabel"
+                and "Save again" in str(w.cget("text")))
+
+
+def test_translation_edit_of_a_palantype_entry_is_not_blocked(root, tmp_path):
+    tab = make_tab(root, tmp_path, [("PRAI^S", "praise")])
+
+    edit(tab, tab.entries[0], english="praises")
+
+    assert tab.entries[0]["english"] == "praises"
+
+
+def test_invalid_new_steno_is_saved_on_the_second_press(root, tmp_path):
+    tab = make_tab(root, tmp_path, [("KAT", "cat")])
+    tab._select_rows([0])
+    tab._open_edit_dialog(tab.entries[0])
+
+    save_dialog(tab, steno="AKT")
+    assert tab.entries[0]["steno"] == "KAT", "first press only warns"
+    assert _error_text(tab)
+
+    save_dialog(tab)
+    assert tab.entries[0]["steno"] == "AKT"
+
+
+def test_copy_menu_labels_use_tab_names(root, tmp_path):
+    class App:
+        tabs = {}
+    first = make_tab(root, tmp_path, [("KAT", "cat")])
+    second = DictionaryTab(root, name="main")
+    second.dict_path = str(tmp_path / "a" / "main.json")
+    third = DictionaryTab(root, name="main")
+    third.dict_path = str(tmp_path / "b" / "main.json")
+    App.tabs = {"k1": first, "k2": second, "k3": third}
+    first.winfo_toplevel = lambda: App
+
+    assert sorted(first._get_other_tabs()) == ["main  (a)", "main  (b)"]

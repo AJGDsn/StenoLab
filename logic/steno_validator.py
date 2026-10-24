@@ -48,7 +48,8 @@ _STROKE_RE = re.compile(
     r"^"
     r"#?"                                     # optional number bar
     r"(?:[STKPWHR0-9]+)?"                     # left bank (digits allowed)
-    r"(?:[AO0-9]*\*?[EU0-9]*"                 # centre with optional star
+    r"(?:[AO0-9]*\*?-?[EU0-9]*"               # centre with optional star; Digital CAT
+                                              # writes '-' between A/O and E/U (HAO-EUF)
         r"|\*"                                # or just star alone
     r")?"
     r"(?:-?[FRPBLGTSDZ0-9]+(?:-[FRPBLGTSDZ0-9]+)?)?"  # right bank

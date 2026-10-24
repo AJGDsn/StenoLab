@@ -24,3 +24,9 @@ def test_rejects_empty_stroke_and_duplicate_star():
     ok, msg = validate_steno("ST**")
     assert not ok
     assert "More than one" in msg
+
+
+def test_accepts_digital_cat_hyphen_between_vowels():
+    assert validate_steno("HAO-EUF")[0]
+    assert validate_steno("TKHRAO*-ET")[0]
+    assert not validate_steno("AKT")[0]

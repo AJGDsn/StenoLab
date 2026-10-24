@@ -320,7 +320,9 @@ The dialog is identical to Add Entry but pre-filled with the existing values. Sa
 
 When you click Save in the Add or Edit dialog, the Steno field is checked against a basic correctness rule: characters must come from the steno alphabet (S T K P W H R A O \* E U F R P B L G T S D Z, digits, and the modifier characters # and -), and within each stroke the keys must appear left-to-right in canonical order. Multi-stroke entries split on "/" and each stroke is checked individually.
 
-If validation fails, the Save is blocked, the Steno field gains a red border, and a message below the field explains the problem ("Invalid character 'x'", "Keys are out of order", and so on). The error clears as soon as you start editing the field again.
+The check only runs when the steno is new or has changed, so editing just the translation, brief flag or comments never triggers it. Digital CAT's style of writing a hyphen between the vowels (HAO-EUF) is accepted.
+
+If validation fails, the Steno field gains a red border and a message below it explains the problem ("Invalid character 'x'", "Keys are out of order", and so on). The check only knows Plover's English layout, so it's a warning rather than a rule: press Save again with the same steno to keep it anyway. This is how you edit Palantype and other systems' dictionaries. The message clears as soon as you start editing the field again.
 
 Validation runs only at Save time, not as you type. Briefs are entered key-by-key, and validating mid-stroke would flicker errors while you're still typing.
 

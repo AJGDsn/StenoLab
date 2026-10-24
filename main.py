@@ -867,14 +867,17 @@ class StenoApp(tk.Tk):
         if name_to_remove is not None:
             del self.tabs[name_to_remove]
         self.notebook.forget(widget)
+        # forget() only unmaps the tab; destroying it frees its entries and
+        # table, which otherwise stay in memory until the app exits.
+        widget.destroy()
         self._refresh_content_state()
 
-        if self.tabs:
-            first = next(iter(self.tabs.values()))
+        active = self._get_active_tab() if self.tabs else None
+        if active is not None:
             self.statusbar.update_status(
-                entries=len(first.entries),
+                entries=len(active.entries),
                 dictionaries=len(self.tabs),
-                active=first.name
+                active=active.name
             )
         else:
             self.statusbar.update_status(entries=0, dictionaries=0, active="None", unsaved=0)
