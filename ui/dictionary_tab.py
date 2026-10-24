@@ -2,7 +2,6 @@
 import copy
 import os
 import re
-import json
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime
@@ -11,6 +10,7 @@ from tksheet import Sheet
 
 from logic.settings_store import load_settings, save_settings
 from logic.metadata_store import save_metadata, ensure_metadata
+from logic.dictionary_writer import write_dictionary
 from logic.undo_stack import UndoStack
 from ui.searchbar import SearchBar
 from ui.theme import C
@@ -923,7 +923,7 @@ class DictionaryTab(ttk.Frame):
     # Save JSON
     # ------------------------------------------------------------------
     def save_json(self) -> bool:
-        """Write steno→english pairs back to the .json file (no metadata).
+        """Write steno→english pairs back to the .json or .rtf file (no metadata).
 
         Before writing, snapshot the existing on-disk file into the backup
         folder so the previous version is recoverable if this save turns
@@ -951,18 +951,8 @@ class DictionaryTab(ttk.Frame):
             if not proceed:
                 return False
 
-        # Preserve duplicate steno keys by writing object members manually
-        # rather than collapsing into a Python dict.
-        pieces = []
-        for entry in self.entries:
-            k = json.dumps(entry["steno"], ensure_ascii=False)
-            v = json.dumps(entry["english"], ensure_ascii=False)
-            pieces.append(f"  {k}: {v}")
-        serialized = "{\n" + ",\n".join(pieces) + "\n}" if pieces else "{}"
-
         try:
-            with open(self.dict_path, "w", encoding="utf-8") as f:
-                f.write(serialized)
+            write_dictionary(self.entries, self.dict_path)
             if not self._save_metadata_if_dirty():
                 return False
             self._set_dirty(False)

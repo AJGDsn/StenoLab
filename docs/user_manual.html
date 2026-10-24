@@ -132,6 +132,7 @@ hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
 <li><a href="#11-keyboard-shortcuts">11. Keyboard Shortcuts</a></li>
 <li><a href="#12-files-and-storage-appendix">12. Files and Storage (Appendix)</a><ul>
 <li><a href="#dictionary-files">Dictionary files</a></li>
+<li><a href="#rtfcre-dictionaries">RTF/CRE dictionaries</a></li>
 <li><a href="#metadata-sidecar-files">Metadata sidecar files</a></li>
 <li><a href="#backup-files">Backup files</a></li>
 <li><a href="#restoring-from-a-backup">Restoring from a backup</a></li>
@@ -254,6 +255,7 @@ hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
 <p>File → Open Dictionary, or Ctrl+O, or the ⊞ toolbar button. The file picker accepts any JSON file. The expected format is a flat object mapping steno keys to translation strings — the same format Plover uses.</p>
 <p>Example: {"KAT": "cat", "TKOG": "dog"}</p>
 <p>Duplicate steno keys in the source file are preserved as separate entries rather than collapsed (a standard JSON parser would silently keep only the last value for a duplicate key). This matters because duplicates surface in the Conflicts filter, where they can be reviewed and resolved.</p>
+<p>The file picker also accepts RTF/CRE dictionaries (.rtf), the interchange format exported by Eclipse, Case CATalyst, Digital CAT, Plover and other CAT software. See <a href="#rtfcre-dictionaries">RTF/CRE dictionaries</a> in Section 12 for how their formatting is shown.</p>
 <h2 id="multiple-dictionaries">Multiple dictionaries</h2>
 <p>Each opened dictionary becomes a new tab. There is no fixed limit on how many can be open at once. Tabs persist across sessions: whichever dictionaries are open when the application closes will reopen on the next launch.</p>
 <h2 id="saving">Saving</h2>
@@ -716,6 +718,44 @@ hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
 }</p>
 <p>This is the same format Plover uses, so dictionaries can be opened in either application. Files are written with UTF-8 encoding and two-space indentation.</p>
 <p>Duplicate steno keys in the file are preserved on load (Section 7) but cannot survive a save without manual resolution: when StenoLab writes a dictionary back, the JSON object format only allows one value per key. Resolve conflicts before saving, or the second duplicate will be silently lost.</p>
+<h2 id="rtfcre-dictionaries">RTF/CRE dictionaries</h2>
+<p>Dictionaries with an .rtf extension are read and written in RTF/CRE format. So that they look and search the same as JSON dictionaries, CRE formatting is shown in Plover syntax and converted back when the file is saved:</p>
+<table>
+<thead>
+<tr>
+<th>RTF/CRE</th>
+<th>Shown as</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>\cxds (delete space)</td>
+<td _ing="^ing">{^}, or a compact form such as</td>
+</tr>
+<tr>
+<td>\cxfc / \cxfl (force capital / lower case)</td>
+<td _="&gt;">{-|} /</td>
+</tr>
+<tr>
+<td>{\cxp. } and other punctuation</td>
+<td>{.} {,} {?} {!} {:} {;}</td>
+</tr>
+<tr>
+<td>{\cxfing a} (fingerspelling)</td>
+<td>{&amp;a}</td>
+</tr>
+<tr>
+<td>\par, \tab</td>
+<td _92_t_="^\t^">{^\n^},</td>
+</tr>
+<tr>
+<td _="…" _92_42_92_cxplovermacro="\*\cxplovermacro">{\*\cxplovermeta …},</td>
+<td>the Plover meta or =macro</td>
+</tr>
+</tbody>
+</table>
+<p>Anything else is preserved unchanged. Unrecognised formatting such as {\i text} stays visible in the translation as raw RTF. Hidden per-entry data such as Digital CAT entry dates and comments is kept out of sight and written back on save. When you save over an existing .rtf, its header (CAT system name, stylesheet) is reused. Save As to a new .rtf writes a standard header. Equivalent Plover forms may be normalised: for example {^}ing is shown as {^ing}.</p>
+<p>To convert a dictionary file without opening it, use Tools → Convert Dictionary → JSON to RTF... or RTF to JSON.... Choose the source file, then where to save the converted copy. The source is left untouched, its metadata (dates, brief flags, comments) is copied to the new file, and you are offered the chance to open the result. If the destination already exists it is backed up before being replaced. Save As can also convert an open dictionary: choose a .json name to save an RTF dictionary as Plover JSON, or the reverse.</p>
 <h2 id="metadata-sidecar-files">Metadata sidecar files</h2>
 <p>Per-entry metadata (creation date, modification date, brief flag, comments, frequency) is stored alongside the dictionary in a separate file. Sidecar files live in StenoLab's data folder — a <strong>StenoLab Data</strong> folder inside your Documents folder (OneDrive-synced if you use OneDrive) — not next to the dictionary, so the dictionary file remains pure Plover JSON.</p>
 <p>Location:</p>

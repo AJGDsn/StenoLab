@@ -222,6 +222,8 @@ Example: {"KAT": "cat", "TKOG": "dog"}
 
 Duplicate steno keys in the source file are preserved as separate entries rather than collapsed (a standard JSON parser would silently keep only the last value for a duplicate key). This matters because duplicates surface in the Conflicts filter, where they can be reviewed and resolved.
 
+The file picker also accepts RTF/CRE dictionaries (.rtf), the interchange format exported by Eclipse, Case CATalyst, Digital CAT, Plover and other CAT software. See [RTF/CRE dictionaries](#rtfcre-dictionaries) in Section 12 for how their formatting is shown.
+
 ## Multiple dictionaries
 
 Each opened dictionary becomes a new tab. There is no fixed limit on how many can be open at once. Tabs persist across sessions: whichever dictionaries are open when the application closes will reopen on the next launch.
@@ -639,6 +641,23 @@ These are the JSON dictionary files you open with File → Open Dictionary. Sten
 This is the same format Plover uses, so dictionaries can be opened in either application. Files are written with UTF-8 encoding and two-space indentation.
 
 Duplicate steno keys in the file are preserved on load (Section 7) but cannot survive a save without manual resolution: when StenoLab writes a dictionary back, the JSON object format only allows one value per key. Resolve conflicts before saving, or the second duplicate will be silently lost.
+
+## RTF/CRE dictionaries
+
+Dictionaries with an .rtf extension are read and written in RTF/CRE format. So that they look and search the same as JSON dictionaries, CRE formatting is shown in Plover syntax and converted back when the file is saved:
+
+| RTF/CRE | Shown as |
+| --- | --- |
+| \\cxds (delete space) | {^}, or a compact form such as {^ing} |
+| \\cxfc / \\cxfl (force capital / lower case) | {-\|} / {>} |
+| {\\cxp. } and other punctuation | {.} {,} {?} {!} {:} {;} |
+| {\\cxfing a} (fingerspelling) | {&a} |
+| \\par, \\tab | {^\\n^}, {^\\t^} |
+| {\\\*\\cxplovermeta …}, {\\\*\\cxplovermacro …} | the Plover meta or =macro |
+
+Anything else is preserved unchanged. Unrecognised formatting such as {\\i text} stays visible in the translation as raw RTF. Hidden per-entry data such as Digital CAT entry dates and comments is kept out of sight and written back on save. When you save over an existing .rtf, its header (CAT system name, stylesheet) is reused. Save As to a new .rtf writes a standard header. Equivalent Plover forms may be normalised: for example {^}ing is shown as {^ing}.
+
+To convert a dictionary file without opening it, use Tools → Convert Dictionary → JSON to RTF... or RTF to JSON.... Choose the source file, then where to save the converted copy. The source is left untouched, its metadata (dates, brief flags, comments) is copied to the new file, and you are offered the chance to open the result. If the destination already exists it is backed up before being replaced. Save As can also convert an open dictionary: choose a .json name to save an RTF dictionary as Plover JSON, or the reverse.
 
 ## Metadata sidecar files
 

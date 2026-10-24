@@ -1,11 +1,13 @@
 # logic/dictionary_loader.py
 import json
 from .metadata_store import load_metadata
+from .rtf_dictionary import decode_rtf_bytes, is_rtf_path, read_rtf_dictionary
 
 
 def load_dictionary_with_metadata(dict_path: str):
     """
-    Load a dictionary JSON and its metadata (if present).
+    Load a dictionary (JSON, or RTF/CRE by .rtf extension) and its metadata
+    (if present).  RTF translations are converted to Plover syntax.
 
     Duplicate steno keys are preserved as separate entries so they surface
     as conflicts in the UI.  Standard json.load() silently keeps only the
@@ -21,6 +23,31 @@ def load_dictionary_with_metadata(dict_path: str):
         metadata: dict keyed by steno
         has_metadata: bool
     """
+    if is_rtf_path(dict_path):
+        triples = _read_rtf_triples(dict_path)
+    else:
+        triples = [(steno, english, None) for steno, english in _read_json_pairs(dict_path)]
+
+    metadata = load_metadata(dict_path)
+    has_metadata = len(metadata) > 0
+
+    entries = []
+    for steno, english, rtf_extra in triples:
+        meta = metadata.get(steno, {})
+        entry = {
+            "steno": steno,
+            "english": english,
+            "modified": meta.get("modified", ""),
+            "date_added": meta.get("date_added", ""),
+        }
+        if rtf_extra:
+            entry["rtf_extra"] = rtf_extra
+        entries.append(entry)
+
+    return entries, metadata, has_metadata
+
+
+def _read_json_pairs(dict_path: str):
     with open(dict_path, "r", encoding="utf-8") as f:
         raw_text = f.read()
 
@@ -33,20 +60,24 @@ def load_dictionary_with_metadata(dict_path: str):
         for pair in pairs
     ):
         raise ValueError(f"Dictionary file must be a JSON object: {dict_path}")
+    return pairs
 
-    metadata = load_metadata(dict_path)
-    has_metadata = len(metadata) > 0
 
-    entries = []
-    for steno, english in pairs:
-        meta = metadata.get(steno, {})
-        entries.append(
-            {
-                "steno": steno,
-                "english": english,
-                "modified": meta.get("modified", ""),
-                "date_added": meta.get("date_added", ""),
-            }
-        )
+def _read_rtf_triples(dict_path: str):
+    with open(dict_path, "rb") as f:
+        raw_text = decode_rtf_bytes(f.read())
+    try:
+        _, triples = read_rtf_dictionary(raw_text)
+    except ValueError:
+        raise ValueError(f"Dictionary file must be an RTF/CRE dictionary: {dict_path}")
+    return triples
 
-    return entries, metadata, has_metadata
+
+def read_rtf_header(dict_path: str) -> str | None:
+    """Header of an existing RTF dictionary, reused when saving over it."""
+    try:
+        with open(dict_path, "rb") as f:
+            header, _ = read_rtf_dictionary(decode_rtf_bytes(f.read()))
+        return header
+    except (OSError, ValueError):
+        return None

@@ -190,6 +190,17 @@ class StenoApp(tk.Tk):
             command=self._open_metadata_folder,
         )
         tools_menu.add_separator()
+        convert_menu = tk.Menu(tools_menu, tearoff=0)
+        convert_menu.add_command(
+            label="JSON to RTF...",
+            command=lambda: self._convert_dictionary(".json", ".rtf"),
+        )
+        convert_menu.add_command(
+            label="RTF to JSON...",
+            command=lambda: self._convert_dictionary(".rtf", ".json"),
+        )
+        tools_menu.add_cascade(label="Convert Dictionary", menu=convert_menu)
+        tools_menu.add_separator()
         tools_menu.add_command(
             label="Import Frequency List...",
             command=self._import_frequency_list,
@@ -587,8 +598,8 @@ class StenoApp(tk.Tk):
         new_path = filedialog.asksaveasfilename(
             parent=self,
             title="Save Dictionary As",
-            defaultextension=".json",
-            filetypes=[("JSON Dictionary", "*.json")],
+            defaultextension=os.path.splitext(initial)[1] or ".json",
+            filetypes=[("JSON Dictionary", "*.json"), ("RTF/CRE Dictionary", "*.rtf")],
             initialfile=initial,
         )
         if not new_path:
@@ -638,6 +649,85 @@ class StenoApp(tk.Tk):
             tab._refresh_dictionary_header()
 
     # ------------------------------------------------------------
+    # Convert Dictionary
+    # ------------------------------------------------------------
+    _FORMAT_FILETYPES = {
+        ".json": ("JSON Dictionary", "*.json"),
+        ".rtf": ("RTF/CRE Dictionary", "*.rtf"),
+    }
+
+    def _convert_dictionary(self, src_ext, dst_ext):
+        """Convert a dictionary file on disk to the other format."""
+        from tkinter import filedialog
+        from logic.dictionary_writer import convert_dictionary
+        from logic.backup_store import backup_dictionary
+
+        src_label = self._FORMAT_FILETYPES[src_ext][0]
+        src = filedialog.askopenfilename(
+            parent=self,
+            title=f"Convert {src_label}",
+            filetypes=[self._FORMAT_FILETYPES[src_ext]],
+            defaultextension=src_ext,
+        )
+        if not src:
+            return
+
+        # Conversion reads the file on disk, so unsaved edits are not included.
+        src_tab = self.tabs.get(self._tab_key_for_path(src))
+        if src_tab is not None and getattr(src_tab, "_json_dirty", False):
+            if not messagebox.askyesno(
+                "Unsaved Changes",
+                f"{os.path.basename(src)} has unsaved changes, which will not "
+                "be included in the conversion.\n\nConvert the saved version?",
+            ):
+                return
+
+        name, _ = os.path.splitext(os.path.basename(src))
+        dst = filedialog.asksaveasfilename(
+            parent=self,
+            title="Save Converted Dictionary As",
+            initialdir=os.path.dirname(src),
+            initialfile=name + dst_ext,
+            filetypes=[self._FORMAT_FILETYPES[dst_ext]],
+            defaultextension=dst_ext,
+        )
+        if not dst:
+            return
+        if self._tab_key_for_path(dst) in self.tabs:
+            messagebox.showerror(
+                "Convert Failed",
+                f"{os.path.basename(dst)} is open in a tab. Close it before "
+                "converting over it.",
+            )
+            return
+
+        # The save dialog has already confirmed any overwrite; keep a backup
+        # of the file being replaced, as a normal save would.
+        ok, msg = backup_dictionary(dst, kind="save")
+        if not ok and not messagebox.askyesno(
+            "Backup Failed",
+            f"Could not back up {os.path.basename(dst)}:\n\n{msg}\n\n"
+            "Overwrite it anyway?",
+        ):
+            return
+
+        try:
+            count = convert_dictionary(src, dst)
+        except Exception as e:
+            messagebox.showerror(
+                "Convert Failed",
+                f"Could not convert {os.path.basename(src)}:\n\n{e}",
+            )
+            return
+
+        if messagebox.askyesno(
+            "Conversion Complete",
+            f"Converted {count:,} entries to {os.path.basename(dst)}.\n\n"
+            "Open it now?",
+        ):
+            self._open_dictionary_path(dst)
+
+    # ------------------------------------------------------------
     # Open Dictionary
     # ------------------------------------------------------------
     def _open_dictionary(self):
@@ -647,7 +737,7 @@ class StenoApp(tk.Tk):
         if os.path.isdir(path):
             messagebox.showerror(
                 "Invalid Selection",
-                "Please select a JSON dictionary file, not a folder."
+                "Please select a JSON or RTF dictionary file, not a folder."
             )
             return
         self._open_dictionary_path(path)

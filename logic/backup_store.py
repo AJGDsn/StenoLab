@@ -10,6 +10,7 @@ and follow the naming pattern:
 
     <name>__<pathhash>_<YYYY-MM-DD>_<HH-MM-SS>-<ms>_open.json
     <name>__<pathhash>_<YYYY-MM-DD>_<HH-MM-SS>-<ms>_save.json
+    (RTF dictionaries are backed up with an .rtf extension instead)
     <name>__<pathhash>_<YYYY-MM-DD>_<HH-MM-SS>-<ms>_open.metadata.json
     <name>__<pathhash>_<YYYY-MM-DD>_<HH-MM-SS>-<ms>_save.metadata.json
 
@@ -100,9 +101,11 @@ def _parse_backup_filename(filename: str) -> tuple[str | None, str | None, str |
     kind is 'open', 'save', or 'legacy' (pre-naming-scheme backups).
     Returns (None, None, None) if the filename does not match any known pattern.
     """
-    if not filename.endswith(".json") or filename.endswith(".metadata.json"):
+    if filename.endswith(".metadata.json"):
         return None, None, None
-    stem = filename[:-5]
+    stem, ext = os.path.splitext(filename)
+    if ext.lower() not in (".json", ".rtf"):
+        return None, None, None
 
     m = _NEW_BACKUP_RE.match(stem)
     if m:
@@ -155,7 +158,8 @@ def backup_dictionary(dict_path: str, kind: str = "save") -> tuple[bool, str]:
     ts     = _timestamp()
 
     try:
-        dict_dst = os.path.join(BACKUP_ROOT, f"{prefix}_{ts}_{kind}.json")
+        ext = ".rtf" if dict_path.lower().endswith(".rtf") else ".json"
+        dict_dst = os.path.join(BACKUP_ROOT, f"{prefix}_{ts}_{kind}{ext}")
         shutil.copy2(dict_path, dict_dst)
 
         # Mirror the metadata sidecar if present

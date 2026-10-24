@@ -20,6 +20,7 @@ from datetime import datetime
 
 from ui.theme import C
 from logic.backup_store import list_backups
+from logic.rtf_dictionary import decode_rtf_bytes, is_rtf_path
 
 
 class RestoreBackupDialog(tk.Toplevel):
@@ -207,6 +208,9 @@ def _count_entries(backup_path: str) -> str:
     rather than being silently collapsed by the standard JSON parser.
     """
     try:
+        if is_rtf_path(backup_path):
+            with open(backup_path, "rb") as f:
+                return str(decode_rtf_bytes(f.read()).count("{\\*\\cxs "))
         with open(backup_path, "r", encoding="utf-8") as f:
             pairs = json.loads(f.read(), object_pairs_hook=lambda p: p)
         if isinstance(pairs, list):
