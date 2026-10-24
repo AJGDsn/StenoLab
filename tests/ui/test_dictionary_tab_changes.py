@@ -421,3 +421,32 @@ def test_follow_searches_only_visible_rows_and_leaves_state_when_unmatched(root,
     assert target.search_config["text_query"] == "dog", "search left as found"
     assert [e["steno"] for e in target.filtered_entries] == ["TKOG"]
     assert selected(target) == ("TKOG", "cells", "steno"), "selection left as found"
+
+
+# --- Flexible column ----------------------------------------------------------
+
+def test_comments_absorbs_width_changes_and_its_width_is_not_saved(root, tmp_path):
+    tab = make_tab(root, tmp_path, [("KAT", "cat")])
+    tab.pack(fill="both", expand=True)
+    root.geometry("1200x500")
+    root.deiconify()
+    root.update()
+    try:
+        def widths():
+            return dict(zip(tab.column_order, tab.sheet.get_column_widths()))
+        total = sum(widths().values())
+        comments_before = widths()["comments"]
+
+        english = tab.column_order.index("english")
+        tab.sheet.column_width(english, widths()["english"] + 100, redraw=True)
+        tab._on_column_resized()
+        root.update()
+
+        assert widths()["comments"] == pytest.approx(comments_before - 100, abs=2)
+        assert sum(widths().values()) == pytest.approx(total, abs=2), "still fills the window"
+        assert tab.column_widths["english"] == widths()["english"], "user's width persists"
+        saved = settings_store.load_settings()["column_widths"]
+        assert "comments" not in saved or saved["comments"] != widths()["comments"]
+    finally:
+        tab.pack_forget()
+        root.withdraw()

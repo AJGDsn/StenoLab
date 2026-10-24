@@ -77,7 +77,6 @@ class StenoApp(tk.Tk):
 
         # Reopen tabs from previous session
         self._restore_open_tabs()
-        self._refresh_content_state(show_home=not self.tabs)
         self._refresh_undo_buttons()
 
         # Re-apply title bar after the window is mapped, so DWM has a real HWND
@@ -272,8 +271,6 @@ class StenoApp(tk.Tk):
         self.content_frame = ttk.Frame(self, style="AppShell.TFrame")
         self.content_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        self.home_frame = self._build_home_screen(self.content_frame)
-
         self.notebook = ttk.Notebook(self.content_frame)
         self.notebook.bind("<Button-3>", self._on_tab_right_click)
         self.notebook.bind("<Button-2>", self._on_tab_middle_click)
@@ -281,134 +278,12 @@ class StenoApp(tk.Tk):
         self.notebook.bind("<B1-Motion>", self._on_tab_drag_motion, add="+")
         self.notebook.bind("<ButtonRelease-1>", self._on_tab_drag_end, add="+")
         self._drag_tab_id = None
+        self.notebook.pack(fill=tk.BOTH, expand=True)
 
         self.statusbar = StatusBar(self, on_save_all=self._save_all_dictionaries)
         self.statusbar.pack(fill=tk.X, side=tk.BOTTOM)
 
         self.statusbar.update_status(entries=0, dictionaries=0, active="None", unsaved=0)
-
-    def _build_home_screen(self, parent):
-        frame = ttk.Frame(parent, style="AppShell.TFrame")
-
-        card = ttk.Frame(frame, style="Card.TFrame", padding=32)
-        card.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.7)
-
-        ttk.Label(
-            card,
-            text="Welcome to StenoLab",
-            style="CardTitle.TLabel",
-        ).pack(anchor="w")
-        ttk.Label(
-            card,
-            text=(
-                "Open a Plover-style JSON dictionary to search, annotate, "
-                "back up, and tune your steno outlines."
-            ),
-            style="CardSubtitle.TLabel",
-            wraplength=680,
-        ).pack(anchor="w", pady=(6, 22))
-
-        actions = ttk.Frame(card, style="CardActions.TFrame")
-        actions.pack(fill=tk.X)
-        ttk.Button(
-            actions,
-            text="📂  Open Dictionary...",
-            style="Primary.TButton",
-            command=self._open_dictionary,
-        ).pack(side=tk.LEFT)
-        ttk.Button(
-            actions,
-            text="Restore Backup...",
-            style="Secondary.TButton",
-            command=self._restore_backup,
-        ).pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Label(
-            actions,
-            text="Tip: Ctrl+O opens, Ctrl+F finds, Ctrl+S saves.",
-            style="CardSubtitle.TLabel",
-        ).pack(side=tk.RIGHT)
-
-        ttk.Separator(card, orient="horizontal").pack(fill=tk.X, pady=22)
-
-        recent_title = ttk.Label(card, text="Recent Dictionaries",
-                                 style="CardSectionTitle.TLabel")
-        recent_title.pack(anchor="w")
-        self.home_recent_frame = ttk.Frame(card, style="CardActions.TFrame")
-        self.home_recent_frame.pack(fill=tk.X, pady=(8, 0))
-        self._refresh_home_recent()
-
-        return frame
-
-    def _recent_dictionary_paths(self):
-        settings = load_settings()
-        paths = []
-        for path in settings.get("open_tabs", []):
-            if path and os.path.isfile(path) and path not in paths:
-                paths.append(path)
-        return paths[:5]
-
-    def _refresh_home_recent(self):
-        frame = getattr(self, "home_recent_frame", None)
-        if frame is None:
-            return
-        for child in frame.winfo_children():
-            child.destroy()
-        paths = self._recent_dictionary_paths()
-        if not paths:
-            ttk.Label(
-                frame,
-                text="No recent dictionaries yet. Open one to get started.",
-                style="CardSubtitle.TLabel",
-            ).pack(anchor="w")
-            return
-        for path in paths:
-            row = ttk.Frame(frame, style="CardActions.TFrame")
-            row.pack(fill=tk.X, pady=3)
-
-            name_label = ttk.Label(
-                row,
-                text=os.path.basename(path),
-                style="CardItem.TLabel",
-                cursor="hand2",
-            )
-            name_label.pack(side=tk.LEFT)
-            dir_label = ttk.Label(
-                row,
-                text=os.path.dirname(path),
-                style="CardSubtitle.TLabel",
-                cursor="hand2",
-            )
-            dir_label.pack(side=tk.LEFT, padx=(10, 0), fill=tk.X, expand=True)
-
-            for clickable in (name_label, dir_label):
-                clickable.bind(
-                    "<Button-1>",
-                    lambda _e, p=path: self._open_dictionary_path(p),
-                )
-            ttk.Button(
-                row,
-                text="Open",
-                style="Link.TButton",
-                command=lambda p=path: self._open_dictionary_path(p),
-            ).pack(side=tk.RIGHT)
-
-    def _refresh_content_state(self, show_home: bool = False):
-        if not hasattr(self, "home_frame") or not hasattr(self, "notebook"):
-            return
-        if self.tabs:
-            if self.home_frame.winfo_ismapped():
-                self.home_frame.pack_forget()
-            if not self.notebook.winfo_ismapped():
-                self.notebook.pack(fill=tk.BOTH, expand=True)
-        else:
-            if self.notebook.winfo_ismapped():
-                self.notebook.pack_forget()
-            if show_home:
-                self._refresh_home_recent()
-                if not self.home_frame.winfo_ismapped():
-                    self.home_frame.pack(fill=tk.BOTH, expand=True)
-            elif self.home_frame.winfo_ismapped():
-                self.home_frame.pack_forget()
 
     # ------------------------------------------------------------
     # Tab switching
@@ -437,10 +312,15 @@ class StenoApp(tk.Tk):
 
     def _get_active_tab(self):
         try:
-            widget = self.notebook.nametowidget(self.notebook.select())
-            return widget
+            selected = self.notebook.select()
+            # With no tabs, select() is "" and nametowidget("") would return
+            # the main window itself, not a tab.
+            if not selected:
+                return None
+            widget = self.notebook.nametowidget(selected)
         except Exception:
             return None
+        return widget if isinstance(widget, DictionaryTab) else None
 
     def _tab_id_at(self, x, y):
         try:
@@ -816,7 +696,6 @@ class StenoApp(tk.Tk):
 
         self.notebook.add(tab, text=name)
         self.tabs[tab_key] = tab
-        self._refresh_content_state()
         self.notebook.select(tab)
         if hasattr(tab, "_refresh_dictionary_header"):
             tab._refresh_dictionary_header()
@@ -883,7 +762,6 @@ class StenoApp(tk.Tk):
         # forget() only unmaps the tab; destroying it frees its entries and
         # table, which otherwise stay in memory until the app exits.
         widget.destroy()
-        self._refresh_content_state()
 
         active = self._get_active_tab() if self.tabs else None
         if active is not None:

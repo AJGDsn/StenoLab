@@ -183,38 +183,6 @@ def _configure_styles(style: ttk.Style):
 
     style.configure("AppShell.TFrame",
                     background=C["bg"])
-    style.configure("Card.TFrame",
-                    background=C["bg_card"],
-                    borderwidth=1,
-                    bordercolor=C["border"],
-                    relief="solid")
-    style.configure("CardAlt.TFrame",
-                    background=C["bg_card_alt"],
-                    borderwidth=1,
-                    bordercolor=C["border"],
-                    relief="solid")
-    style.configure("Card.TLabel",
-                    background=C["bg_card"],
-                    foreground=C["fg"],
-                    font=("Segoe UI", 10))
-    style.configure("CardTitle.TLabel",
-                    background=C["bg_card"],
-                    foreground=C["fg"],
-                    font=("Segoe UI", 20, "bold"))
-    style.configure("CardSectionTitle.TLabel",
-                    background=C["bg_card"],
-                    foreground=C["fg"],
-                    font=("Segoe UI", 11, "bold"))
-    style.configure("CardItem.TLabel",
-                    background=C["bg_card"],
-                    foreground=C["accent"],
-                    font=("Segoe UI", 10, "bold"))
-    style.configure("CardSubtitle.TLabel",
-                    background=C["bg_card"],
-                    foreground=C["fg_dim"],
-                    font=("Segoe UI", 10))
-    style.configure("CardActions.TFrame",
-                    background=C["bg_card"])
     style.configure("Muted.TLabel",
                     background=C["bg_panel"],
                     foreground=C["fg_dim"],
@@ -278,18 +246,6 @@ def _configure_styles(style: ttk.Style):
                           ("disabled", C["bg_raised"])],
               foreground=[("disabled", C["fg_dim"])])
 
-    style.configure("Secondary.TButton",
-                    background=C["bg_card"],
-                    foreground=C["fg"],
-                    padding=(10, 5),
-                    borderwidth=1,
-                    bordercolor=C["border"],
-                    font=("Segoe UI", 10))
-    style.map("Secondary.TButton",
-              background=[("active", C["bg_raised"]),
-                          ("pressed", C["bg_raised"])],
-              foreground=[("disabled", C["fg_dim"])])
-
     # Compact inline button for toolbars and form rows (e.g. Clear).
     style.configure("Compact.TButton",
                     background=C["bg_panel"],
@@ -301,16 +257,6 @@ def _configure_styles(style: ttk.Style):
     style.map("Compact.TButton",
               background=[("active", C["bg_raised"])],
               foreground=[("active", C["fg"])])
-
-    style.configure("Link.TButton",
-                    background=C["bg_panel"],
-                    foreground=C["accent"],
-                    padding=(2, 0),
-                    borderwidth=0,
-                    font=("Segoe UI", 9, "underline"))
-    style.map("Link.TButton",
-              foreground=[("active", C["accent_hover"]), ("disabled", C["fg_dim"])],
-              background=[("active", C["bg_panel"])])
 
     # Pill / chip button used for active search and filter indicators.
     # Reads as a soft-tinted capsule with a small "×" remove affordance.

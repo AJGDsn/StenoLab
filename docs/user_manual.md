@@ -283,7 +283,9 @@ Click a row to select it. Click-and-drag across rows (or Shift-click) selects a 
 
 ## Column widths
 
-Drag the divider between two column headers to resize. New widths save automatically and apply to every dictionary tab on next launch.
+Drag the divider between two column headers to resize. The table always fills the window: the Comments column (or Translation, in Focus mode, which has no Comments column) takes up whatever width is left, so widening a column takes the space from Comments and narrowing one gives it back. Comments keeps at least 80 pixels; beyond that, a horizontal scrollbar appears.
+
+New widths save automatically and apply to every dictionary tab, as soon as you switch to it, and on the next launch. The width of Comments is not saved, since it always follows the other columns.
 
 ## Row colours
 
@@ -594,7 +596,7 @@ When a panel is collapsed but is currently filtering, its header shows a hint su
 
 ## Column widths
 
-Column widths persist across sessions and are shared across all dictionary tabs. Adjust them on whichever tab is convenient; the new widths apply everywhere on the next launch.
+Column widths persist across sessions and are shared across all dictionary tabs. Adjust them on whichever tab is convenient; other tabs pick up the new widths when you switch to them. The flexible Comments column's width is not stored, since it always fills the remaining space.
 
 ## Open tabs
 

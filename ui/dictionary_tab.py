@@ -240,6 +240,8 @@ class DictionaryTab(ttk.Frame):
         self._cf_rows:   list = []
         self._both_rows: list = []
         self._find_rows: list = []
+        self._current_row = None   # row holding the selection, tinted
+        self._fitted_flex = (None, -1)   # (column, width) set by _fit_flex_column
 
         # Undo / redo
         self._undo_stack = UndoStack()
@@ -315,6 +317,7 @@ class DictionaryTab(ttk.Frame):
                 )
             self.sheet.refresh()
         self._update_sort_headings()
+        self._fit_flex_column()
 
     # ------------------------------------------------------------------
     # Column order helpers
@@ -355,6 +358,47 @@ class DictionaryTab(ttk.Frame):
         except Exception:
             pass
         self._update_sort_headings()
+        self._fit_flex_column()
+
+    # Smallest width the flexible Comments column is squeezed to before the
+    # table scrolls sideways instead.
+    _MIN_FLEX_COMMENTS_WIDTH = 80
+
+    def _flex_column(self) -> str | None:
+        """The column that absorbs spare or missing width: Comments, or
+        Translation in layouts without Comments (Focus mode)."""
+        for col in ("comments", "english"):
+            if col in self.column_order:
+                return col
+        return None
+
+    def _fit_flex_column(self, _event=None):
+        """
+        Keep the table exactly as wide as the window by resizing the
+        flexible column (_flex_column): widening another column takes the
+        space from it, narrowing one gives the space to it, and so does
+        resizing the window.  Its fitted width is never saved, so the
+        other columns' widths are what persist.
+        """
+        flex = self._flex_column() if hasattr(self, "sheet") else None
+        if flex is None:
+            return
+        available = self.sheet.MT.winfo_width()
+        if available <= 1:
+            return  # not laid out yet; the <Configure> binding retries
+        widths = self.sheet.get_column_widths()
+        idx = self.column_order.index(flex)
+        if idx >= len(widths):
+            return
+        others = sum(w for i, w in enumerate(widths) if i != idx)
+        if flex == "comments":
+            minimum = self._MIN_FLEX_COMMENTS_WIDTH
+        else:
+            minimum = self.column_widths.get(flex, self.DEFAULT_WIDTHS[flex])
+        target = int(max(minimum, available - others - 2))
+        if abs(widths[idx] - target) > 1:
+            self.sheet.column_width(idx, target, redraw=True)
+        self._fitted_flex = (flex, target)
 
     def _toggle_freq_column(self):
         """Show or hide the F column; sync to all other open tabs and persist."""
@@ -969,6 +1013,8 @@ class DictionaryTab(ttk.Frame):
         self.sheet.extra_bindings("column_select",       self._on_header_click)
         self.sheet.extra_bindings("column_width_resize", self._on_column_resized)
         self._header_tooltip = HoverTooltip(self.sheet.CH, self._header_tooltip_text)
+        self.sheet.bind("<<SheetSelect>>", self._update_current_row, add="+")
+        self.sheet.MT.bind("<Configure>", self._fit_flex_column, add="+")
         self.sheet.MT.bind("<Double-Button-1>", self._on_double_click, add="+")
         self.sheet.MT.bind("<Button-3>",        self._on_right_click,  add="+")
         self.sheet.MT.bind("<Return>",          self._on_enter,        add="+")
@@ -984,7 +1030,15 @@ class DictionaryTab(ttk.Frame):
             return
         self.sheet.set_options(
             table_bg=C["bg_panel"], table_fg=C["fg"],
-            header_bg=C["bg_panel"], header_fg=C["fg_dim"],
+            # The header sits on a slightly darker band with one rule
+            # under it; zebra striping alone separates the rows, without
+            # grid lines.
+            header_bg=C["bg"], header_fg=C["fg_dim"],
+            header_border_fg=C["border"],
+            show_vertical_grid=False, show_horizontal_grid=False,
+            # No blank scroll space past the last column: the flexible
+            # column (_fit_flex_column) fills the width exactly.
+            empty_horizontal=0,
             table_grid_fg=C["border"], header_grid_fg=C["border"],
             index_bg=C["bg_panel"], index_fg=C["fg_dim"], index_grid_fg=C["border"],
             table_selected_cells_bg=C["accent"], table_selected_cells_fg="white",
@@ -994,8 +1048,8 @@ class DictionaryTab(ttk.Frame):
             # Do NOT highlight the header above the selection: paint the
             # "selected" header states the same as a normal header so nothing
             # lights up under the selection box.
-            header_selected_cells_bg=C["bg_panel"], header_selected_cells_fg=C["fg_dim"],
-            header_selected_columns_bg=C["bg_panel"], header_selected_columns_fg=C["fg_dim"],
+            header_selected_cells_bg=C["bg"], header_selected_cells_fg=C["fg_dim"],
+            header_selected_columns_bg=C["bg"], header_selected_columns_fg=C["fg_dim"],
             frame_bg=C["bg_panel"], outline_color=C["border"],
             alternate_color=C["bg_alt"],
             # Scrollbars (tksheet's own ttk widgets) — track the palette so
@@ -1038,8 +1092,47 @@ class DictionaryTab(ttk.Frame):
         if self._find_rows:
             self.sheet.highlight_rows(self._find_rows, bg=C["find_match_bg"],
                                       fg=C["find_match_fg"], redraw=False)
+        if self._current_row is not None:
+            self._paint_row(self._current_row)
         if redraw:
             self.sheet.refresh()
+
+    def _paint_row(self, row: int) -> None:
+        """Give one row the highlight it should have: the soft accent tint
+        when it holds the selection, otherwise its find / bookmark /
+        conflict colour, or none."""
+        if not (0 <= row < len(self.filtered_entries)):
+            return
+        self.sheet.dehighlight_rows([row], redraw=False)
+        if row == self._current_row:
+            bg, fg = C["accent_soft"], C["fg"]
+        elif row in self._find_rows:
+            bg, fg = C["find_match_bg"], C["find_match_fg"]
+        elif row in self._both_rows:
+            bg, fg = C["bookmarked_conflict_bg"], C["bookmarked_conflict_fg"]
+        elif row in self._cf_rows:
+            bg, fg = C["conflict_bg"], C["conflict_fg"]
+        elif row in self._bm_rows:
+            bg, fg = C["bookmark_bg"], C["bookmark_fg"]
+        else:
+            return
+        self.sheet.highlight_rows([row], bg=bg, fg=fg, redraw=False)
+
+    def _update_current_row(self, _event=None) -> None:
+        """Tint the whole row holding the selection, so it is easy to spot
+        rather than only a thin outline around one cell."""
+        if not hasattr(self, "sheet"):
+            return
+        selected = self.sheet.get_currently_selected()
+        row = selected.row if selected else None
+        if row == self._current_row:
+            return
+        previous, self._current_row = self._current_row, row
+        if previous is not None:
+            self._paint_row(previous)
+        if row is not None:
+            self._paint_row(row)
+        self.sheet.refresh()
 
     def refresh_theme(self):
         """Re-apply colour-dependent settings after a theme switch."""
@@ -1409,6 +1502,7 @@ class DictionaryTab(ttk.Frame):
         if rows:
             self.sheet.see(rows[0], redraw=False)
         self.sheet.refresh()
+        self._update_current_row()
 
     # ------------------------------------------------------------------
     # Following a selection across tabs
@@ -1461,6 +1555,7 @@ class DictionaryTab(ttk.Frame):
             self.sheet.select_cell(row, column, redraw=False, run_binding_func=False)
             self.sheet.see(row, column, redraw=False)
             self.sheet.refresh()
+            self._update_current_row()
         return True
 
     def select_and_see_row(self, row):
@@ -1504,6 +1599,7 @@ class DictionaryTab(ttk.Frame):
 
     def _on_column_resized(self, event=None):
         self._save_column_widths()
+        self._fit_flex_column()
 
     # ------------------------------------------------------------------
     # Filters + search
@@ -1860,8 +1956,9 @@ class DictionaryTab(ttk.Frame):
             reset_col_positions=reset_columns, reset_row_positions=True,
         )
         self._bm_rows, self._cf_rows, self._both_rows = bm_rows, cf_rows, both_rows
-        # A fresh data set drops any stale find highlights.
+        # A fresh data set drops any stale find highlights and selection.
         self._find_rows = []
+        self._current_row = None
         self._apply_row_highlights(redraw=False)
 
         if to_reselect:
@@ -1962,6 +2059,11 @@ class DictionaryTab(ttk.Frame):
             return
         for i, col in enumerate(self.column_order):
             if i < len(widths):
+                # The flexible column's fitted width is the table's doing,
+                # not the user's choice, so it isn't kept.
+                flex_col, flex_width = self._fitted_flex
+                if col == flex_col and abs(widths[i] - flex_width) <= 1:
+                    continue
                 self.column_widths[col] = int(widths[i])
         settings = load_settings()
         settings["column_widths"] = self.column_widths
