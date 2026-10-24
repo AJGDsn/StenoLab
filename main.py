@@ -1133,13 +1133,13 @@ class StenoApp(tk.Tk):
         if keysym.startswith("F") and keysym[1:].isdigit():   # F1–F12
             return None
 
-        # Ignore Ctrl-* and Alt-* — those are application shortcuts.
-        # Control bit is 0x4 on all platforms.
-        # Alt bits differ: 0x8 on Windows, 0x80 on Linux/macOS, 0x20000 also
-        # seen on some Windows builds.  Check all three to be safe.
+        # Ignore Ctrl-* shortcuts (Control bit 0x4 is reliable on all
+        # platforms).  We deliberately do NOT test the old "Alt" bits
+        # (0x8 / 0x80 / 0x20000): on Windows a lock key such as Num Lock sets
+        # 0x8 on every keystroke, which was being misread as Alt and killing
+        # type-ahead whenever Num Lock was on.  A genuine Alt/Ctrl combo yields
+        # an empty or non-printable char, which the isprintable() check rejects.
         if event.state & 0x0004:
-            return None
-        if event.state & (0x0008 | 0x0080 | 0x20000):
             return None
 
         char = event.char
