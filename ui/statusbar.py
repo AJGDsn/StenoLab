@@ -99,29 +99,26 @@ class StatusBar(ttk.Frame):
         saved = (self.last_saved or "—").strip() or "—"
         self.saved_label.configure(text=f"Saved: {saved}")
 
-        if self.unsaved_count:
-            if self.unsaved_chip.winfo_ismapped():
-                self.unsaved_chip.pack_forget()
-            if self.save_all_btn.winfo_ismapped():
-                self.save_all_btn.pack_forget()
-            self.save_all_btn.pack(side="right")
-            self.unsaved_chip.pack(side="right", padx=(0, 8))
+        # main.py refreshes the status bar every 400 ms, so only re-pack when
+        # the saved / unsaved state actually changes.
+        has_unsaved = bool(self.unsaved_count)
+        if has_unsaved != getattr(self, "_packed_unsaved", None):
+            self._packed_unsaved = has_unsaved
+            self.unsaved_chip.pack_forget()
+            self.save_all_btn.pack_forget()
+            if has_unsaved:
+                self.save_all_btn.pack(side="right")
+                self.unsaved_chip.pack(side="right", padx=(0, 8))
+            else:
+                self.unsaved_chip.pack(side="right", padx=(0, 0))
+            self.save_all_btn.configure(state="normal" if has_unsaved else "disabled")
+        if has_unsaved:
             self.unsaved_chip.configure(
                 text=f"{self.unsaved_count} unsaved",
                 style="HeaderWarning.TLabel",
             )
-            self.save_all_btn.configure(state="normal")
         else:
-            if self.save_all_btn.winfo_ismapped():
-                self.save_all_btn.pack_forget()
-            if not self.unsaved_chip.winfo_ismapped():
-                self.unsaved_chip.pack(side="right")
-            self.unsaved_chip.configure(
-                text="Saved",
-                style="StatusBar.TLabel",
-            )
-            self.unsaved_chip.pack_configure(padx=(0, 0))
-            self.save_all_btn.configure(state="disabled")
+            self.unsaved_chip.configure(text="Saved", style="StatusBar.TLabel")
 
     def _save_all(self):
         if callable(self._on_save_all):

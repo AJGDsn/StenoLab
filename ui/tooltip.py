@@ -33,11 +33,15 @@ class Tooltip:
             self._job = None
         self._hide()
 
+    def _position(self):
+        """Screen position for the tip: just below the widget."""
+        return (self.widget.winfo_rootx() + 8,
+                self.widget.winfo_rooty() + self.widget.winfo_height() + 4)
+
     def _show(self):
         if self._tip:
             return
-        x = self.widget.winfo_rootx() + 8
-        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 4
+        x, y = self._position()
         self._tip = tk.Toplevel(self.widget)
         self._tip.wm_overrideredirect(True)
         self._tip.wm_geometry(f"+{x}+{y}")
@@ -68,90 +72,33 @@ class Tooltip:
             self._tip = None
 
 
-class TreeHeadingTooltip:
-    """Tooltip that follows the cursor over Treeview column headings.
-
-    Treeview headings aren't real Tk widgets so the normal Tooltip class
-    can't bind to them.  This helper watches the cursor on the parent
-    Treeview and, when the user pauses over a heading, shows a tooltip
-    whose text is pulled from a column → text map.
+class HoverTooltip(Tooltip):
+    """
+    Tooltip whose text depends on where the pointer is inside the widget,
+    such as one tip per column of a table header.  `text_at(event)` returns
+    the text for that spot, or None for no tip; the tip moves on when the
+    text changes.
     """
 
-    DELAY = 500
+    def __init__(self, widget, text_at):
+        super().__init__(widget, "")
+        self._text_at = text_at
+        self._xy = (0, 0)
+        widget.bind("<Motion>", self._on_motion, add="+")
 
-    def __init__(self, tree, texts: dict):
-        self.tree = tree
-        self.texts = dict(texts or {})
-        self._tip = None
-        self._job = None
-        self._current_column = None
-        tree.bind("<Motion>", self._on_motion, add="+")
-        tree.bind("<Leave>",  self._on_leave,  add="+")
-        tree.bind("<Button>", self._on_leave,  add="+")
-
-    def set_texts(self, texts: dict):
-        self.texts = dict(texts or {})
+    def _schedule(self, event=None):
+        if event is not None:
+            self._on_motion(event)
 
     def _on_motion(self, event):
-        try:
-            region = self.tree.identify("region", event.x, event.y)
-        except tk.TclError:
-            return
-        if region != "heading":
-            self._cancel()
-            return
-        col_id = self.tree.identify_column(event.x)
-        try:
-            col_index = int(col_id.lstrip("#")) - 1
-            cols = list(self.tree["columns"])
-            col_name = cols[col_index] if 0 <= col_index < len(cols) else None
-        except (ValueError, IndexError, tk.TclError):
-            col_name = None
-        if col_name == self._current_column and self._tip:
+        text = self._text_at(event)
+        if text == self.text and (self._tip or self._job):
             return
         self._cancel()
-        self._current_column = col_name
-        text = self.texts.get(col_name) if col_name else None
-        if not text:
-            return
-        x = self.tree.winfo_rootx() + event.x + 12
-        y = self.tree.winfo_rooty() + event.y + 18
-        self._job = self.tree.after(self.DELAY,
-                                    lambda x=x, y=y, t=text: self._show(x, y, t))
+        self.text = text
+        if text:
+            self._xy = (event.x_root + 12, event.y_root + 18)
+            self._job = self.widget.after(self.DELAY, self._show)
 
-    def _on_leave(self, _event=None):
-        self._cancel()
-
-    def _cancel(self):
-        if self._job:
-            try:
-                self.tree.after_cancel(self._job)
-            except Exception:
-                pass
-            self._job = None
-        if self._tip:
-            try:
-                self._tip.destroy()
-            except Exception:
-                pass
-            self._tip = None
-        self._current_column = None
-
-    def _show(self, x, y, text):
-        if self._tip:
-            return
-        self._tip = tk.Toplevel(self.tree)
-        self._tip.wm_overrideredirect(True)
-        self._tip.wm_geometry(f"+{x}+{y}")
-        self._tip.configure(background=C["border"])
-        tk.Label(
-            self._tip,
-            text=text,
-            background=C["bg_raised"],
-            foreground=C["fg"],
-            relief="flat",
-            borderwidth=0,
-            font=("Segoe UI", 9),
-            padx=9,
-            pady=5,
-        ).pack(padx=1, pady=1)
+    def _position(self):
+        return self._xy

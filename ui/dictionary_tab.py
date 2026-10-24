@@ -20,12 +20,10 @@ from logic.dictionary_writer import write_dictionary
 from logic.undo_stack import UndoStack
 from ui.searchbar import SearchBar
 from ui.theme import C
-from ui.tooltip import Tooltip
+from ui.tooltip import HoverTooltip, Tooltip
 
 
 MAX_COMMENT_CHARS  = 40
-ANIMATION_DURATION = 180   # ms
-ANIMATION_STEPS    = 12
 
 WRITTEN_NUMBERS = frozenset({
     "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
@@ -291,7 +289,6 @@ class DictionaryTab(ttk.Frame):
         # table gets maximum vertical space; the user can expand it when
         # they need to refine results.
         self.unified_expanded      = not bool(initial_search_collapsed)
-        self.unified_content_height = 0
 
         self.search_config = {}
 
@@ -733,10 +730,6 @@ class DictionaryTab(ttk.Frame):
             style=check_style, command=self._toggle_freq_column,
         ).grid(row=2, column=3, padx=(0, 0), pady=4, sticky="w")
 
-        # Hidden count label used by legacy code paths (kept as None-safe
-        # reference; the visible count is now in self.count_chip).
-        self.count_label = self.count_chip
-
         # Establish initial expanded / collapsed visual.
         if self.unified_expanded:
             self.unified_body.pack(fill=tk.X, padx=0, pady=(0, 0))
@@ -958,6 +951,7 @@ class DictionaryTab(ttk.Frame):
         # Map the old Treeview interactions onto the sheet.
         self.sheet.extra_bindings("column_select",       self._on_header_click)
         self.sheet.extra_bindings("column_width_resize", self._on_column_resized)
+        self._header_tooltip = HoverTooltip(self.sheet.CH, self._header_tooltip_text)
         self.sheet.MT.bind("<Double-Button-1>", self._on_double_click, add="+")
         self.sheet.MT.bind("<Button-3>",        self._on_right_click,  add="+")
         self.sheet.MT.bind("<Return>",          self._on_enter,        add="+")
@@ -1049,9 +1043,6 @@ class DictionaryTab(ttk.Frame):
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
-    def set_mode(self, edit_mode: bool):
-        pass   # kept for compatibility
-
     def load_entries(self, entries, metadata=None):
         self.entries = entries
         self.metadata = ensure_metadata(entries, metadata or {})
@@ -1412,7 +1403,6 @@ class DictionaryTab(ttk.Frame):
     def _on_double_click(self, event=None): self._open_edit_dialog_for_selected()
     def _on_enter(self,        event=None): self._open_edit_dialog_for_selected()
     def _on_ctrl_e(self,       event=None): self._open_edit_dialog_for_selected()
-    def toolbar_edit(self):                 self._open_edit_dialog_for_selected()
 
     # ------------------------------------------------------------------
     # Header click → sort;  column resize → persist widths
@@ -1431,6 +1421,16 @@ class DictionaryTab(ttk.Frame):
             return
         self._sort_by(self.column_order[col_idx])
         self.sheet.deselect("all", redraw=True)
+
+    def _header_tooltip_text(self, event):
+        """Explain the column under the pointer (S, W, B and F are cryptic)."""
+        try:
+            col_idx = self.sheet.identify_column(event)
+        except Exception:
+            return None
+        if col_idx is None or not (0 <= col_idx < len(self.column_order)):
+            return None
+        return self.COLUMN_TOOLTIPS.get(self.column_order[col_idx])
 
     def _on_column_resized(self, event=None):
         self._save_column_widths()
@@ -1897,58 +1897,6 @@ class DictionaryTab(ttk.Frame):
         settings["column_widths"] = self.column_widths
         save_settings(settings)
         self.settings = settings
-
-    # ------------------------------------------------------------------
-    # Details dialog
-    # ------------------------------------------------------------------
-    def _open_details_dialog_for_selected(self):
-        entry = self._entry_for_row(next(iter(self._selected_rows()), -1))
-        if entry is None:
-            return
-        steno   = entry["steno"]
-        english = entry.get("english") or ""
-
-        dlg = tk.Toplevel(self)
-        dlg.title("Entry Details")
-        dlg.transient(self.winfo_toplevel())
-        dlg.grab_set()
-        _style_dialog(dlg)
-
-        con = ttk.Frame(dlg, padding=12)
-        con.pack(fill=tk.BOTH, expand=True)
-        ttk.Label(con, text="Entry Details", font=("Segoe UI", 12, "bold")).grid(
-            row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
-
-        meta = (self.metadata or {}).get(steno, {})
-
-        def add_row(r, lbl, val):
-            ttk.Label(con, text=lbl+":", font=("Segoe UI", 9, "bold")).grid(
-                row=r, column=0, sticky="ne", padx=(0, 8), pady=2)
-            ttk.Label(con, text=val, wraplength=320, justify="left").grid(
-                row=r, column=1, sticky="nw", pady=2)
-
-        r = 1
-        add_row(r, "Steno",       steno);                                           r += 1
-        add_row(r, "Translation", english);                                         r += 1
-        add_row(r, "Added",       meta.get("date_added", entry.get("date_added",""))); r += 1
-        add_row(r, "Modified",    meta.get("modified",   entry.get("modified",""))); r += 1
-        add_row(r, "Brief",       "Yes" if meta.get("brief") else "No");            r += 1
-        add_row(r, "Bookmarked",  "★ Yes" if steno in self.bookmarked_stenos else "No"); r += 1
-
-        ttk.Label(con, text="Comments:", font=("Segoe UI", 9, "bold")).grid(
-            row=r, column=0, sticky="ne", padx=(0, 8), pady=(8, 2))
-        ct = tk.Text(con, height=6, wrap="word", state="normal",
-                     borderwidth=1, relief="solid", font=("Segoe UI", 9))
-        ct.grid(row=r, column=1, sticky="nsew", pady=(8, 2))
-        ct.insert("1.0", meta.get("comments", ""))
-        ct.config(state="disabled")
-        con.rowconfigure(r, weight=1)
-        con.columnconfigure(1, weight=1)
-
-        ttk.Button(con, text="Close", command=dlg.destroy).grid(
-            row=r+1, column=0, columnspan=2, pady=(10, 0))
-        dlg.update_idletasks()
-        center_on_parent(dlg, self.winfo_toplevel())
 
     # ------------------------------------------------------------------
     # Edit / Add dialog

@@ -1247,12 +1247,11 @@ class StenoApp(tk.Tk):
     def _toggle_theme(self):
         """Switch between dark and light mode and persist the choice."""
         window_state, window_geometry = self._snapshot_window_geometry()
-        column_widths = self._snapshot_column_widths()
 
         self._theme_mode = "dark" if self.dark_mode_var.get() else "light"
         apply_theme(self, self._theme_mode)
         self.after_idle(lambda: self._restore_after_theme_switch(
-            window_state, window_geometry, column_widths,
+            window_state, window_geometry,
         ))
 
         # Update Find & Replace if it happens to be open - apply_theme already
@@ -1275,36 +1274,9 @@ class StenoApp(tk.Tk):
         except tk.TclError:
             return "normal", None
 
-    def _snapshot_column_widths(self):
-        out = {}
-        for tab in self.tabs.values():
-            tree = getattr(tab, "tree", None)
-            if tree is None:
-                continue
-            try:
-                out[tab] = {
-                    col: tree.column(col, "width")
-                    for col in getattr(tab, "column_order", [])
-                }
-            except tk.TclError:
-                pass
-        return out
-
-    def _restore_after_theme_switch(self, window_state, window_geometry, column_widths):
-        for tab, widths in column_widths.items():
-            tree = getattr(tab, "tree", None)
-            if tree is None:
-                continue
-            for col, width in widths.items():
-                try:
-                    tree.column(col, width=width)
-                except tk.TclError:
-                    pass
-            try:
-                tab.column_widths.update(widths)
-            except Exception:
-                pass
-
+    def _restore_after_theme_switch(self, window_state, window_geometry):
+        # Column widths need no restoring: the tksheet table keeps its own
+        # widths across a theme switch.
         try:
             if window_state == "zoomed":
                 self.state("zoomed")
