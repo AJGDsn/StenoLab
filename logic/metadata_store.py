@@ -105,6 +105,57 @@ def load_metadata(dictionary_path: str) -> dict:
 
 
 # ------------------------------------------------------------
+# Metadata delivered beside a dictionary
+# ------------------------------------------------------------
+
+# Tools that build dictionaries (e.g. the Steno Theory scripts) can deliver
+# metadata in StenoLab's format as "<dictionary name>.stenolab-meta.json"
+# next to the dictionary file.
+SIDECAR_SUFFIX = ".stenolab-meta.json"
+
+
+def sidecar_path_for(dictionary_path: str) -> str:
+    return os.path.splitext(dictionary_path)[0] + SIDECAR_SUFFIX
+
+
+def import_sidecar_metadata(dictionary_path: str) -> bool:
+    """
+    Merge a delivered metadata file into StenoLab's own store.
+
+    Runs when the file is newer than the stored metadata (or there is none
+    yet), so a rebuilt delivery comes through but opening the dictionary
+    again doesn't redo it.  The delivered values win, except blank dates,
+    which never wipe stored ones.  Returns True if anything was imported.
+    """
+    sidecar = sidecar_path_for(dictionary_path)
+    if not os.path.isfile(sidecar):
+        return False
+    stored = _metadata_file_for(dictionary_path)
+    if os.path.exists(stored) and os.path.getmtime(stored) >= os.path.getmtime(sidecar):
+        return False
+    try:
+        with open(sidecar, "r", encoding="utf-8") as f:
+            delivered = json.load(f)
+    except (OSError, ValueError):
+        return False
+    if not isinstance(delivered, dict):
+        return False
+
+    merged = load_metadata(dictionary_path)
+    for steno, record in delivered.items():
+        if not isinstance(record, dict):
+            continue
+        current = dict(merged.get(steno) or {})
+        for field, value in record.items():
+            if field in ("date_added", "modified") and not value:
+                continue
+            current[field] = value
+        merged[steno] = current
+    save_metadata(dictionary_path, merged)
+    return True
+
+
+# ------------------------------------------------------------
 # Saving
 # ------------------------------------------------------------
 

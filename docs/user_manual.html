@@ -135,12 +135,19 @@ hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
 <li><a href="#dictionary-files">Dictionary files</a></li>
 <li><a href="#rtfcre-dictionaries">RTF/CRE dictionaries</a></li>
 <li><a href="#metadata-sidecar-files">Metadata sidecar files</a></li>
+<li><a href="#metadata-delivered-with-a-dictionary">Metadata delivered with a dictionary</a></li>
 <li><a href="#backup-files">Backup files</a></li>
 <li><a href="#restoring-from-a-backup">Restoring from a backup</a></li>
 <li><a href="#settings-file">Settings file</a></li>
 <li><a href="#the-tools-menu">The Tools menu</a></li>
 <li><a href="#manual-backups">Manual backups</a></li>
 <li><a href="#sharing-dictionaries">Sharing dictionaries</a></li>
+</ul>
+</li>
+<li><a href="#13-viewing-on-an-ipad">13. Viewing on an iPad</a><ul>
+<li><a href="#getting-a-dictionary-onto-the-ipad">Getting a dictionary onto the iPad</a></li>
+<li><a href="#installing-the-viewer">Installing the viewer</a></li>
+<li><a href="#using-the-viewer">Using the viewer</a></li>
 </ul>
 </li>
 </ul>
@@ -785,6 +792,9 @@ hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
 <p>To keep the file small for large dictionaries, it is written without indentation, and fields that hold their default value (brief false, comments empty, bookmarked false, frequency 0) are left out. StenoLab reads a missing field as its default. The example above shows every field for clarity; on disk this entry is stored as <code>"KAT":{"date_added":"2024-08-01","modified":"2024-09-12","comments":"extracted from Lapwing"}</code>.</p>
 <p>The frequency field holds a usage-frequency score for the entry's translation. It is populated by <strong>Tools → Import Frequency List</strong> and is read by the <em>Has frequency</em> and <em>Top N by frequency</em> filters (Section 7) and the optional <strong>F</strong> column (Section 4). A score of 0 means no frequency data has been matched to that entry. The bookmarked field is unused in practice (bookmarks are session-only, see Section 9) but the field is retained in the schema for future flexibility.</p>
 <p>If a metadata file is missing or unreadable, StenoLab builds a fresh one in memory using today's date for both Added and Modified fields. There is no harm in deleting metadata files; it just means history information for that dictionary is lost.</p>
+<h2 id="metadata-delivered-with-a-dictionary">Metadata delivered with a dictionary</h2>
+<p>A tool that builds a dictionary can deliver metadata with it, in the same format, as a file named after the dictionary with <code>.stenolab-meta.json</code> at the end, in the same folder. For example, <code>Ian-rationalised.json</code> and <code>Ian-rationalised.stenolab-meta.json</code>.</p>
+<p>When you open the dictionary, StenoLab merges that file into its own metadata if it has none for the dictionary yet, or if the delivered file is newer. So a rebuilt delivery comes through, but opening the dictionary again doesn't undo your own changes. The delivered values (comments, brief flags and so on) take precedence, except blank dates, which never replace dates StenoLab already has. Open the dictionary itself, not the <code>.stenolab-meta.json</code> file; StenoLab explains if you pick that one by mistake.</p>
 <h2 id="backup-files">Backup files</h2>
 <p>StenoLab automatically backs up dictionaries so a previous version is always recoverable. Backups are stored as timestamped copies of the dictionary file together with its metadata sidecar. RTF dictionaries are backed up with an .rtf extension.</p>
 <p>Location:</p>
@@ -910,6 +920,29 @@ main_2026-04-30_14-32-08-241.metadata.json</p>
 <h2 id="sharing-dictionaries">Sharing dictionaries</h2>
 <p>To share a dictionary with another user, just send the dictionary file. Plover users can open either format; for CAT software such as Eclipse or Case CATalyst, send an RTF (use Tools → Convert Dictionary → JSON to RTF if needed). Metadata is local to your machine and won't travel with it; the recipient will see the entries with empty Added / Modified dates and an unset Brief flag, building up their own metadata as they use the dictionary.</p>
 <p>If you want the metadata to come with the dictionary, send the matching file from Documents\StenoLab Data\metadata\ as well, and the recipient can drop it into the same location on their machine.</p>
+<h1 id="13-viewing-on-an-ipad">13. Viewing on an iPad</h1>
+<p>The StenoLab Viewer is a read-only companion for the iPad (or any tablet or phone). It runs in Safari, works offline once installed, and reads dictionaries straight from the Files app, so anything in OneDrive, Dropbox or iCloud Drive is available. Files are read on the iPad itself; nothing is uploaded anywhere.</p>
+<h2 id="getting-a-dictionary-onto-the-ipad">Getting a dictionary onto the iPad</h2>
+<p>Any Plover JSON or RTF/CRE dictionary can be opened directly. To see your comments as well, export a review file from StenoLab:</p>
+<ul>
+<li>Open the dictionary in StenoLab and, if you only want part of it, use the search and filters to show just those entries (for example the Conflicts filter, or Bookmarked).</li>
+<li>Choose File → Export for iPad... and save the file somewhere the iPad can reach, such as your OneDrive or Dropbox folder.</li>
+</ul>
+<p>A review file contains each entry's steno, translation and comment, and records which search and filters were used. Other metadata (dates, brief flags, frequencies) is not included.</p>
+<h2 id="installing-the-viewer">Installing the viewer</h2>
+<ul>
+<li>In Safari on the iPad, open https://ajgdsn.github.io/StenoLab/</li>
+<li>Tap the Share button, then <strong>Add to Home Screen</strong>. The viewer then opens like an app and works without a connection.</li>
+</ul>
+<p>Installing it on the Home Screen also matters for storage: Safari may clear data kept by websites that haven't been used for a while, but Home Screen apps are exempt.</p>
+<h2 id="using-the-viewer">Using the viewer</h2>
+<ul>
+<li><strong>Open</strong> picks one or more files from Files. Each becomes a tab, and stays on the iPad until you remove it (<strong>Remove from iPad</strong> at the bottom of the tab; the file itself is not touched). Opening a file with the same name again replaces the stored copy, which is how you update it after re-exporting.</li>
+<li>Search by translation and by steno with the same Begins With / Contains / Ends With choices as StenoLab. Tap the Steno or Translation heading to sort, and again to reverse.</li>
+<li>Comments appear under the translation. Tap an entry to see its full comment.</li>
+<li><strong>Compare</strong> looks a word up in every open dictionary at once, so you can see how each one writes it. Tap an entry and choose <strong>Compare in all dictionaries</strong> to go straight there. An exact match is shown if there is one; otherwise the entries beginning with the word.</li>
+</ul>
+<p>The viewer cannot change dictionaries; edits are made in StenoLab on the computer.</p>
 </div>
 </body>
 </html>

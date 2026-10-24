@@ -154,6 +154,8 @@ _Reference for hobbyist users of Plover and on-keyboard steno engines_
 
 [Sharing dictionaries 26](#_Toc228778565)
 
+[13\. Viewing on an iPad](#13-viewing-on-an-ipad)
+
 # 1\. Overview
 
 StenoLab is a desktop application for managing steno dictionaries. It opens, edits, and saves dictionary files in the standard Plover JSON format or the RTF/CRE format used by CAT software, converts between the two, and tracks per-entry metadata (creation date, modification date, brief flag, comments) in sidecar files.
@@ -699,6 +701,12 @@ The frequency field holds a usage-frequency score for the entry's translation. I
 
 If a metadata file is missing or unreadable, StenoLab builds a fresh one in memory using today's date for both Added and Modified fields. There is no harm in deleting metadata files; it just means history information for that dictionary is lost.
 
+## Metadata delivered with a dictionary
+
+A tool that builds a dictionary can deliver metadata with it, in the same format, as a file named after the dictionary with `.stenolab-meta.json` at the end, in the same folder. For example, `Ian-rationalised.json` and `Ian-rationalised.stenolab-meta.json`.
+
+When you open the dictionary, StenoLab merges that file into its own metadata if it has none for the dictionary yet, or if the delivered file is newer. So a rebuilt delivery comes through, but opening the dictionary again doesn't undo your own changes. The delivered values (comments, brief flags and so on) take precedence, except blank dates, which never replace dates StenoLab already has. Open the dictionary itself, not the `.stenolab-meta.json` file; StenoLab explains if you pick that one by mistake.
+
 ## Backup files
 
 StenoLab automatically backs up dictionaries so a previous version is always recoverable. Backups are stored as timestamped copies of the dictionary file together with its metadata sidecar. RTF dictionaries are backed up with an .rtf extension.
@@ -783,3 +791,31 @@ Restoring is the reverse: place the dictionary files where they were before, res
 To share a dictionary with another user, just send the dictionary file. Plover users can open either format; for CAT software such as Eclipse or Case CATalyst, send an RTF (use Tools → Convert Dictionary → JSON to RTF if needed). Metadata is local to your machine and won't travel with it; the recipient will see the entries with empty Added / Modified dates and an unset Brief flag, building up their own metadata as they use the dictionary.
 
 If you want the metadata to come with the dictionary, send the matching file from Documents\\StenoLab Data\\metadata\\ as well, and the recipient can drop it into the same location on their machine.
+# 13\. Viewing on an iPad
+
+The StenoLab Viewer is a read-only companion for the iPad (or any tablet or phone). It runs in Safari, works offline once installed, and reads dictionaries straight from the Files app, so anything in OneDrive, Dropbox or iCloud Drive is available. Files are read on the iPad itself; nothing is uploaded anywhere.
+
+## Getting a dictionary onto the iPad
+
+Any Plover JSON or RTF/CRE dictionary can be opened directly. To see your comments as well, export a review file from StenoLab:
+
+*   Open the dictionary in StenoLab and, if you only want part of it, use the search and filters to show just those entries (for example the Conflicts filter, or Bookmarked).
+*   Choose File → Export for iPad... and save the file somewhere the iPad can reach, such as your OneDrive or Dropbox folder.
+
+A review file contains each entry's steno, translation and comment, and records which search and filters were used. Other metadata (dates, brief flags, frequencies) is not included.
+
+## Installing the viewer
+
+*   In Safari on the iPad, open https://ajgdsn.github.io/StenoLab/
+*   Tap the Share button, then **Add to Home Screen**. The viewer then opens like an app and works without a connection.
+
+Installing it on the Home Screen also matters for storage: Safari may clear data kept by websites that haven't been used for a while, but Home Screen apps are exempt.
+
+## Using the viewer
+
+*   **Open** picks one or more files from Files. Each becomes a tab, and stays on the iPad until you remove it (**Remove from iPad** at the bottom of the tab; the file itself is not touched). Opening a file with the same name again replaces the stored copy, which is how you update it after re-exporting.
+*   Search by translation and by steno with the same Begins With / Contains / Ends With choices as StenoLab. Tap the Steno or Translation heading to sort, and again to reverse.
+*   Comments appear under the translation. Tap an entry to see its full comment.
+*   **Compare** looks a word up in every open dictionary at once, so you can see how each one writes it. Tap an entry and choose **Compare in all dictionaries** to go straight there. An exact match is shown if there is one; otherwise the entries beginning with the word.
+
+The viewer cannot change dictionaries; edits are made in StenoLab on the computer.

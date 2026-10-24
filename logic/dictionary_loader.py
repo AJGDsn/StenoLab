@@ -1,6 +1,6 @@
 # logic/dictionary_loader.py
 import json
-from .metadata_store import load_metadata
+from .metadata_store import SIDECAR_SUFFIX, import_sidecar_metadata, load_metadata
 from .rtf_dictionary import decode_rtf_bytes, is_rtf_path, read_rtf_dictionary
 
 
@@ -28,6 +28,7 @@ def load_dictionary_with_metadata(dict_path: str):
     else:
         triples = [(steno, english, None) for steno, english in _read_json_pairs(dict_path)]
 
+    import_sidecar_metadata(dict_path)
     metadata = load_metadata(dict_path)
     has_metadata = len(metadata) > 0
 
@@ -60,6 +61,15 @@ def _read_json_pairs(dict_path: str):
         for pair in pairs
     ):
         raise ValueError(f"Dictionary file must be a JSON object: {dict_path}")
+    # A dictionary maps steno to translation text; a metadata file maps it
+    # to records, and is easy to pick by mistake from the Open dialog.
+    if any(not isinstance(english, (str, type(None))) for _steno, english in pairs):
+        if dict_path.lower().endswith(SIDECAR_SUFFIX):
+            raise ValueError(
+                "This is a StenoLab metadata file, not a dictionary. Open the "
+                "dictionary beside it instead; its metadata is read automatically."
+            )
+        raise ValueError(f"Dictionary translations must be text: {dict_path}")
     return pairs
 
 
