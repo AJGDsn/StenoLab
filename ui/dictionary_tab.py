@@ -768,7 +768,7 @@ class DictionaryTab(ttk.Frame):
         # so the user can select, scroll, resize columns and copy, but not edit
         # in place (edits go through the dialogs, as before).
         self.sheet.enable_bindings(
-            "single_select", "row_select", "drag_select",
+            "single_select", "row_select", "drag_select", "column_select",
             "arrowkeys", "column_width_resize", "double_click_column_resize",
             "copy",
         )
@@ -1228,11 +1228,15 @@ class DictionaryTab(ttk.Frame):
     # Helpers
     # ------------------------------------------------------------------
     def _selected_rows(self) -> list:
-        """Sorted list of selected row indices (indices into filtered_entries)."""
+        """Sorted list of selected row indices (indices into filtered_entries).
+
+        get_cells_as_rows=True means a plain cell click counts as selecting its
+        row, so edit / delete / bookmark work whether the user selected a whole
+        row or just clicked a cell."""
         if not hasattr(self, "sheet"):
             return []
         try:
-            return sorted(self.sheet.get_selected_rows())
+            return sorted(self.sheet.get_selected_rows(get_cells_as_rows=True))
         except Exception:
             return []
 
