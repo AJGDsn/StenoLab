@@ -223,7 +223,11 @@ class DictionaryTab(ttk.Frame):
         """Apply headers, widths and alignment for the current column_order."""
         if not hasattr(self, "sheet"):
             return
-        self.sheet.headers([self.HEADINGS[c] for c in self.column_order])
+        # reset_col_positions=True rebuilds the column-position array to exactly
+        # len(column_order); without it, shrinking the column count (focus mode)
+        # leaves stale slots that draw as empty, letter-headed columns.
+        self.sheet.headers([self.HEADINGS[c] for c in self.column_order],
+                           reset_col_positions=True)
         for i, col in enumerate(self.column_order):
             width = self.column_widths.get(col, self.DEFAULT_WIDTHS[col])
             self.sheet.column_width(i, width, redraw=False)
@@ -801,6 +805,11 @@ class DictionaryTab(ttk.Frame):
             table_selected_rows_bg=C["accent"], table_selected_rows_fg="white",
             table_selected_columns_bg=C["accent"], table_selected_columns_fg="white",
             table_selected_box_cells_fg=C["accent_hover"],
+            # Do NOT highlight the header above the selection: paint the
+            # "selected" header states the same as a normal header so nothing
+            # lights up under the selection box.
+            header_selected_cells_bg=C["bg_panel"], header_selected_cells_fg=C["fg_dim"],
+            header_selected_columns_bg=C["bg_panel"], header_selected_columns_fg=C["fg_dim"],
             frame_bg=C["bg_panel"], outline_color=C["border"],
             alternate_color=C["bg_alt"],
             redraw=False,
