@@ -146,7 +146,7 @@ hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
 </div>
 </nav>
 <h1 id="1-overview">1. Overview</h1>
-<p>StenoLab is a desktop application for managing steno dictionaries. It opens, edits, and saves dictionary files in the standard Plover JSON format and tracks per-entry metadata (creation date, modification date, brief flag, comments) in sidecar files.</p>
+<p>StenoLab is a desktop application for managing steno dictionaries. It opens, edits, and saves dictionary files in the standard Plover JSON format or the RTF/CRE format used by CAT software, converts between the two, and tracks per-entry metadata (creation date, modification date, brief flag, comments) in sidecar files.</p>
 <p>It is not a translation engine. It does not run live alongside steno input, and it does not replace Plover or on-keyboard translation firmware. Its purpose is curation: building, cleaning, and mining dictionaries.</p>
 <p>Multiple dictionaries can be open at once, each in its own tab. Entries can be copied or moved between tabs, which is useful when extracting briefs from a reference dictionary into a personal one or splitting a single working dictionary into themed files.</p>
 <h1 id="2-the-main-window">2. The Main Window</h1>
@@ -231,7 +231,7 @@ hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
 </tr>
 <tr>
 <td>Save As...</td>
-<td>Save a copy to a new path, and continue editing under the new name. The original file is left untouched.</td>
+<td>Save a copy to a new path, and continue editing under the new name. The original file is left untouched. Choosing a .json or .rtf name saves the copy in that format.</td>
 </tr>
 <tr>
 <td>Open Containing Folder</td>
@@ -252,7 +252,7 @@ hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
 <p>Bottom of the window. Shows the active dictionary name, the total number of entries in that dictionary, and the count of dictionaries currently open.</p>
 <h1 id="3-working-with-dictionaries">3. Working with Dictionaries</h1>
 <h2 id="opening-a-dictionary">Opening a dictionary</h2>
-<p>File → Open Dictionary, or Ctrl+O, or the ⊞ toolbar button. The file picker accepts any JSON file. The expected format is a flat object mapping steno keys to translation strings — the same format Plover uses.</p>
+<p>File → Open Dictionary, or Ctrl+O, or the ⊞ toolbar button. The file picker accepts JSON and RTF/CRE (.rtf) dictionaries. A JSON dictionary is a flat object mapping steno keys to translation strings — the same format Plover uses.</p>
 <p>Example: {"KAT": "cat", "TKOG": "dog"}</p>
 <p>Duplicate steno keys in the source file are preserved as separate entries rather than collapsed (a standard JSON parser would silently keep only the last value for a duplicate key). This matters because duplicates surface in the Conflicts filter, where they can be reviewed and resolved.</p>
 <p>The file picker also accepts RTF/CRE dictionaries (.rtf), the interchange format exported by Eclipse, Case CATalyst, Digital CAT, Plover and other CAT software. See <a href="#rtfcre-dictionaries">RTF/CRE dictionaries</a> in Section 12 for how their formatting is shown.</p>
@@ -266,7 +266,7 @@ hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
 <p>Closing the application — File → Exit, or the window close button — follows the same logic but considers all open tabs at once. If several have unsaved changes a single dialog lists them with checkboxes, defaulting to all ticked, so you can save the ones you want and discard the rest in one step. Tabs with no unsaved changes never appear in the dialog; their files are already in sync with disk.</p>
 <p>Metadata edits (Brief flag, Comments, etc.) save themselves immediately and are never at risk on close, so they don't enter either dialog.</p>
 <h2 id="the-unsaved-changes-indicator">The unsaved-changes indicator</h2>
-<p>When a tab has changes that have not yet been written to its dictionary file, a dot (●) appears before the tab name. This signals only that the JSON dictionary file is out of sync with the in-memory entries — metadata changes do not produce the dot because they save immediately on edit.</p>
+<p>When a tab has changes that have not yet been written to its dictionary file, a dot (●) appears before the tab name. This signals only that the dictionary file is out of sync with the in-memory entries — metadata changes do not produce the dot because they save immediately on edit.</p>
 <h1 id="4-the-dictionary-table">4. The Dictionary Table</h1>
 <p>Each tab shows its dictionary as a table. The columns are:</p>
 <table>
@@ -710,14 +710,14 @@ hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
 <h1 id="12-files-and-storage-appendix">12. Files and Storage (Appendix)</h1>
 <p>StenoLab stores all of its data on the local machine. Nothing is uploaded or synchronised. Three categories of file are involved:</p>
 <h2 id="dictionary-files">Dictionary files</h2>
-<p>These are the JSON dictionary files you open with File → Open Dictionary. StenoLab does not move or copy them; it reads from and writes back to whatever path you opened. The format is a flat JSON object mapping steno keys to translation strings:</p>
+<p>These are the JSON or RTF/CRE dictionary files you open with File → Open Dictionary. StenoLab does not move or copy them; it reads from and writes back to whatever path you opened, in the same format. A JSON dictionary is a flat object mapping steno keys to translation strings:</p>
 <p>{<br />
 "KAT": "cat",<br />
 "TKOG": "dog",<br />
 "TPHEUS/SOUR": "Missouri"<br />
 }</p>
 <p>This is the same format Plover uses, so dictionaries can be opened in either application. Files are written with UTF-8 encoding and two-space indentation.</p>
-<p>Duplicate steno keys in the file are preserved on load (Section 7) but cannot survive a save without manual resolution: when StenoLab writes a dictionary back, the JSON object format only allows one value per key. Resolve conflicts before saving, or the second duplicate will be silently lost.</p>
+<p>Duplicate steno keys in the file are preserved on load (Section 7) and written back as separate entries on save, in both formats. Plover keeps only the last value for a duplicated key, so resolve conflicts if you want a predictable result in Plover.</p>
 <h2 id="rtfcre-dictionaries">RTF/CRE dictionaries</h2>
 <p>Dictionaries with an .rtf extension are read and written in RTF/CRE format. So that they look and search the same as JSON dictionaries, CRE formatting is shown in Plover syntax and converted back when the file is saved:</p>
 <table>
@@ -757,7 +757,7 @@ hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
 <p>Anything else is preserved unchanged. Unrecognised formatting such as {\i text} stays visible in the translation as raw RTF. Hidden per-entry data such as Digital CAT entry dates and comments is kept out of sight and written back on save. When you save over an existing .rtf, its header (CAT system name, stylesheet) is reused. Save As to a new .rtf writes a standard header. Equivalent Plover forms may be normalised: for example {^}ing is shown as {^ing}.</p>
 <p>To convert a dictionary file without opening it, use Tools → Convert Dictionary → JSON to RTF... or RTF to JSON.... Choose the source file, then where to save the converted copy. The source is left untouched, its metadata (dates, brief flags, comments) is copied to the new file, and you are offered the chance to open the result. If the destination already exists it is backed up before being replaced. Save As can also convert an open dictionary: choose a .json name to save an RTF dictionary as Plover JSON, or the reverse.</p>
 <h2 id="metadata-sidecar-files">Metadata sidecar files</h2>
-<p>Per-entry metadata (creation date, modification date, brief flag, comments, frequency) is stored alongside the dictionary in a separate file. Sidecar files live in StenoLab's data folder — a <strong>StenoLab Data</strong> folder inside your Documents folder (OneDrive-synced if you use OneDrive) — not next to the dictionary, so the dictionary file remains pure Plover JSON.</p>
+<p>Per-entry metadata (creation date, modification date, brief flag, comments, frequency) is stored alongside the dictionary in a separate file. Sidecar files live in StenoLab's data folder — a <strong>StenoLab Data</strong> folder inside your Documents folder (OneDrive-synced if you use OneDrive) — not next to the dictionary, so the dictionary file itself contains only steno and translations.</p>
 <p>Location:</p>
 <p>Documents\StenoLab Data\metadata\</p>
 <p>Each metadata file is named after its dictionary. For example, a dictionary at C:\dicts\main.json has a metadata file at Documents\StenoLab Data\metadata\main.json. The format is a JSON object keyed by steno:</p>
@@ -774,7 +774,7 @@ hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
 <p>The frequency field holds a usage-frequency score for the entry's translation. It is populated by <strong>Tools → Import Frequency List</strong> and is read by the <em>Has frequency</em> and <em>Top N by frequency</em> filters (Section 7) and the optional <strong>F</strong> column (Section 4). A score of 0 means no frequency data has been matched to that entry. The bookmarked field is unused in practice (bookmarks are session-only, see Section 9) but the field is retained in the schema for future flexibility.</p>
 <p>If a metadata file is missing or unreadable, StenoLab builds a fresh one in memory using today's date for both Added and Modified fields. There is no harm in deleting metadata files; it just means history information for that dictionary is lost.</p>
 <h2 id="backup-files">Backup files</h2>
-<p>StenoLab automatically backs up dictionaries so a previous version is always recoverable. Backups are stored as timestamped copies of the dictionary JSON together with its metadata sidecar.</p>
+<p>StenoLab automatically backs up dictionaries so a previous version is always recoverable. Backups are stored as timestamped copies of the dictionary file together with its metadata sidecar. RTF dictionaries are backed up with an .rtf extension.</p>
 <p>Location:</p>
 <p>Documents\StenoLab Data\backups\</p>
 <p>Filenames combine the dictionary name and a millisecond-precision timestamp, for example:</p>
@@ -785,13 +785,13 @@ main_2026-04-30_14-32-08-241.metadata.json</p>
 <li>When a dictionary is opened in a session, capturing the file as it stood at the start of the working session. This snapshot is taken once per dictionary per session — reopening the same file later in the same session does not produce another open-time backup.</li>
 <li>Before every save, capturing the on-disk file as it was just before being overwritten. So even within a session you can roll back to the version immediately preceding any save.</li>
 </ul>
-<p>Pruning runs after each backup and keeps only the twenty most recent snapshots per dictionary. Older backups are removed automatically. If you need to keep a particular backup beyond that limit, copy it out of the backup folder; StenoLab never touches files it doesn't recognise.</p>
+<p>Pruning runs after each backup and keeps, per dictionary, the three most recent open-time snapshots and the two most recent pre-save snapshots. The two kinds are pruned separately, so heavy saving never pushes out the open-time snapshots. Older backups are removed automatically. If you need to keep a particular backup beyond that limit, copy it out of the backup folder; StenoLab never touches files it doesn't recognise.</p>
 <p>Backup creation runs silently in the background. The exception is a failure: if StenoLab cannot write a backup before saving (most commonly a full disk or permission problem), it warns you and asks whether to save anyway. Saving without a backup is allowed but deliberately makes you confirm, since the safety net would be absent for that save only.</p>
 <h2 id="restoring-from-a-backup">Restoring from a backup</h2>
 <p>Tools → Restore Backup opens a dialog listing every available backup for the active tab's dictionary, newest first. Each row shows when the backup was made, how many entries it contained, and whether a matching metadata sidecar was captured. Select one and click Restore Selected (or double-click) to replace the current file.</p>
 <p>Restoration steps StenoLab performs in order:</p>
 <ul>
-<li>Warns if the active tab has unsaved JSON changes that would be lost.</li>
+<li>Warns if the active tab has unsaved changes that would be lost.</li>
 <li>Asks for confirmation, showing the timestamp of the chosen backup.</li>
 <li>Backs up the current state immediately before replacing it. This is an important property: a restore is itself reversible by restoring the snapshot it took on the way in.</li>
 <li>Replaces the dictionary file (and the metadata sidecar, if the backup includes one) with the chosen backup's contents.</li>
@@ -845,7 +845,7 @@ main_2026-04-30_14-32-08-241.metadata.json</p>
 </tbody>
 </table>
 <h2 id="the-tools-menu">The Tools menu</h2>
-<p>The Tools menu groups the data-folder shortcuts, the restore feature, and the frequency tools:</p>
+<p>The Tools menu groups the restore feature, the data-folder shortcuts, dictionary conversion, and the frequency tools:</p>
 <table>
 <thead>
 <tr>
@@ -871,6 +871,10 @@ main_2026-04-30_14-32-08-241.metadata.json</p>
 <td>Opens the metadata directory in the system file browser. Useful for inspecting a sidecar manually, removing the metadata for a dictionary you no longer use, or transferring metadata between machines.</td>
 </tr>
 <tr>
+<td>Convert Dictionary → JSON to RTF... / RTF to JSON...</td>
+<td>Converts a dictionary file on disk to the other format without opening it. Choose the source, then where to save the copy. The source is left untouched and its metadata is copied to the new file. See <a href="#rtfcre-dictionaries">RTF/CRE dictionaries</a>.</td>
+</tr>
+<tr>
 <td>Import Frequency List...</td>
 <td>Loads a word-frequency list (space/tab-delimited or CSV — rows of a word with a usage count) and writes a frequency score into the metadata of each entry whose translation is a single plain word that matches. This populates the <strong>F</strong> column and the <em>Has frequency</em> / <em>Top N by frequency</em> filters.</td>
 </tr>
@@ -887,12 +891,12 @@ main_2026-04-30_14-32-08-241.metadata.json</p>
 <h2 id="manual-backups">Manual backups</h2>
 <p>The automatic backup system handles routine recovery, but for long-term archiving — disaster recovery, transferring to a new machine, or keeping snapshots beyond the rolling backup window — back up everything by copying:</p>
 <ul>
-<li>Each dictionary JSON file (wherever you keep them).</li>
+<li>Each dictionary file (wherever you keep them).</li>
 <li>The Documents\StenoLab Data folder in its entirety.</li>
 </ul>
 <p>Restoring is the reverse: place the dictionary files where they were before, restore the StenoLab Data folder, and reopen the application. All metadata, settings, automatic backups, and previously open tabs will be present.</p>
 <h2 id="sharing-dictionaries">Sharing dictionaries</h2>
-<p>To share a dictionary with another user, just send the JSON file. Metadata is local to your machine and won't travel with it; the recipient will see the entries with empty Added / Modified dates and an unset Brief flag, building up their own metadata as they use the dictionary.</p>
+<p>To share a dictionary with another user, just send the dictionary file. Plover users can open either format; for CAT software such as Eclipse or Case CATalyst, send an RTF (use Tools → Convert Dictionary → JSON to RTF if needed). Metadata is local to your machine and won't travel with it; the recipient will see the entries with empty Added / Modified dates and an unset Brief flag, building up their own metadata as they use the dictionary.</p>
 <p>If you want the metadata to come with the dictionary, send the matching file from Documents\StenoLab Data\metadata\ as well, and the recipient can drop it into the same location on their machine.</p>
 </div>
 </body>
