@@ -168,7 +168,7 @@ The window has five horizontal regions, top to bottom: the menu bar, the toolbar
 
 ## Menu bar
 
-Standard menus: File, Edit, Tools, View, and Help. Every command has a keyboard shortcut where one is meaningful; see Section 11 for the full list. **Help → User Manual** opens this manual in your default web browser.
+Standard menus: File, Edit, Tools, View, and Help. The menu bar follows the light or dark theme. Click a title, or press Alt with its underlined first letter (Alt+F, Alt+E, Alt+T, Alt+V, Alt+H), to open a menu. Every command has a keyboard shortcut where one is meaningful; see Section 11 for the full list. **Help → User Manual** opens this manual in your default web browser.
 
 ## Toolbar
 
@@ -632,6 +632,7 @@ All keyboard shortcuts available throughout the application:
 | Enter | Find Next | In the Find & Replace dialog |
 | Shift+Enter | Find Previous | In the Find & Replace dialog |
 | Escape | Close Find & Replace | In the Find & Replace dialog |
+| Alt+F / E / T / V / H | Open the File, Edit, Tools, View or Help menu | Main window |
 | Ctrl+Z | Undo | Anywhere |
 | Ctrl+Y / Ctrl+Shift+Z | Redo | Anywhere |
 | Any letter / digit | Begin Text search (type-ahead) | When no input field is focused |

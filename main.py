@@ -4,6 +4,7 @@ from tkinter import ttk, messagebox, filedialog
 
 # UI components
 from ui.theme import apply_steno_theme, apply_theme, set_titlebar_dark, get_mode
+from ui.menubar import MenuBar
 from ui.toolbar import Toolbar
 from ui.dictionary_tab import DictionaryTab
 from ui.statusbar import StatusBar
@@ -113,10 +114,10 @@ class StenoApp(tk.Tk):
     # Menu bar
     # ------------------------------------------------------------
     def _create_menu(self):
-        menubar = tk.Menu(self)
+        menus = []   # (title, menu) for the themed MenuBar
 
         # ── File ──────────────────────────────────────────────────
-        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu = tk.Menu(self, tearoff=0)
         file_menu.add_command(
             label="Open Dictionary...",
             command=self._open_dictionary,
@@ -134,10 +135,10 @@ class StenoApp(tk.Tk):
         )
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self._on_close)
-        menubar.add_cascade(label="File", menu=file_menu)
+        menus.append(("File", file_menu))
 
         # ── Edit ──────────────────────────────────────────────────
-        edit_menu = tk.Menu(menubar, tearoff=0)
+        edit_menu = tk.Menu(self, tearoff=0)
         edit_menu.add_command(
             label="Undo",
             command=self._undo,
@@ -170,10 +171,10 @@ class StenoApp(tk.Tk):
             command=self._toggle_bookmark,
             accelerator="Ctrl+B",
         )
-        menubar.add_cascade(label="Edit", menu=edit_menu)
+        menus.append(("Edit", edit_menu))
 
         # ── Tools ─────────────────────────────────────────────────
-        tools_menu = tk.Menu(menubar, tearoff=0)
+        tools_menu = tk.Menu(self, tearoff=0)
         tools_menu.add_command(
             label="Restore Backup...",
             command=self._restore_backup,
@@ -211,10 +212,10 @@ class StenoApp(tk.Tk):
             label="Manage Ignored Frequency Words...",
             command=self._manage_ignored_frequency_words,
         )
-        menubar.add_cascade(label="Tools", menu=tools_menu)
+        menus.append(("Tools", tools_menu))
 
         # ── View ──────────────────────────────────────────────────
-        view_menu = tk.Menu(menubar, tearoff=0)
+        view_menu = tk.Menu(self, tearoff=0)
         # A radio pair, so exactly one of Light / Dark is always ticked.
         for label, mode in (("Light", "light"), ("Dark", "dark")):
             view_menu.add_radiobutton(
@@ -223,17 +224,21 @@ class StenoApp(tk.Tk):
                 value=mode,
                 command=self._toggle_theme,
             )
-        menubar.add_cascade(label="View", menu=view_menu)
+        menus.append(("View", view_menu))
 
         # ── Help ──────────────────────────────────────────────────
-        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu = tk.Menu(self, tearoff=0)
         help_menu.add_command(
             label="User Manual",
             command=self._open_user_manual,
         )
-        menubar.add_cascade(label="Help", menu=help_menu)
+        menus.append(("Help", help_menu))
 
-        self.config(menu=menubar)
+        # A themed bar instead of the native Windows one, which ignores the
+        # theme and stays white in dark mode.
+        self.menubar = MenuBar(self, menus)
+        self.menubar.pack(fill=tk.X, side=tk.TOP)
+        self.menubar.bind_alt_keys(self)
 
         # Keyboard accelerators
         self.bind("<Control-o>", lambda e: self._open_dictionary())

@@ -161,11 +161,45 @@ def apply_theme(root: tk.Tk, mode: str):
     root.option_add("*TCombobox*Listbox.selectForeground", "white")
     root.option_add("*TCombobox*Listbox.font",             '"Segoe UI" 10')
 
+    style_menus(root)
+
     # OS title bar (Windows only)
     _apply_titlebar_to_all(root, dark=(mode == "dark"))
 
     # Walk the widget tree calling refresh_theme() on any custom widget
     refresh_theme_recursive(root)
+
+
+def _menu_colours() -> dict:
+    return {
+        "background":         C["bg_panel"],
+        "foreground":         C["fg"],
+        "activebackground":   C["accent_soft"],
+        "activeforeground":   C["fg"],
+        "disabledforeground": C["fg_dim"],
+        "selectcolor":        C["accent"],
+        "activeborderwidth":  0,
+        "borderwidth":        0,
+        "relief":             "flat",
+    }
+
+
+def style_menus(root):
+    """Give drop-down and context menus the theme colours: new menus through
+    the option database, and every existing one directly."""
+    colours = _menu_colours()
+    for option, value in colours.items():
+        root.option_add(f"*Menu.{option}", value)
+
+    def walk(widget):
+        if widget.winfo_class() == "Menu":
+            try:
+                widget.configure(**colours)
+            except tk.TclError:
+                pass
+        for child in widget.winfo_children():
+            walk(child)
+    walk(root)
 
 
 def refresh_theme_recursive(widget):
@@ -328,6 +362,17 @@ def _configure_styles(style: ttk.Style):
     style.configure("UnifiedBar.TLabel",
                     background=C["bg_panel"],
                     foreground=C["fg"])
+    # Themed menu bar (ui/menubar.py) replacing the native Windows one.
+    style.configure("MenuBar.TFrame", background=C["bg"])
+    style.configure("MenuBar.TLabel",
+                    background=C["bg"],
+                    foreground=C["fg"],
+                    font=("Segoe UI", 9))
+    style.configure("MenuBarActive.TLabel",
+                    background=C["accent_soft"],
+                    foreground=C["fg"],
+                    font=("Segoe UI", 9))
+
     # Small heading above each group of filter checkboxes.
     style.configure("FilterGroup.TLabel",
                     background=C["bg_panel"],
@@ -404,7 +449,7 @@ def _configure_styles(style: ttk.Style):
                     foreground=C["fg"],
                     font=(icon_font_family(), 13 if icon_font_family() != "Segoe UI Symbol" else 14),
                     padding=(8, 5),
-                    width=2,
+                    width=0,   # natural width: icon-font glyphs are a full em wide
                     borderwidth=0,
                     relief="flat",
                     focusthickness=0)
