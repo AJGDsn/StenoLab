@@ -57,4 +57,4 @@ def test_convert_carries_metadata_to_destination(tmp_path):
 
     convert_dictionary(str(src), str(dst))
 
-    assert metadata_store.load_metadata(str(dst)) == {"KAT": {"comments": "keep me"}}
+    assert metadata_store.load_metadata(str(dst))["KAT"]["comments"] == "keep me"

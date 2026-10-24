@@ -35,6 +35,8 @@ DEFAULT_HEADER = (
 _PUNCTUATION = set(".,?!:;")
 _CONTROL_RE = re.compile(r"\\([a-zA-Z]+)(-?\d+)? ?")
 _SIMPLE_ATTACH_RE = re.compile(r"[^{}\\^\r\n\t]+")
+# Printable ASCII except backslash and braces: needs no escaping or conversion.
+_PLAIN_TEXT_RE = re.compile(r"[ -\[\]-z|~]*")
 # Plover macros look like =undo or =retro_insert_space:args.
 _MACRO_RE = re.compile(r"=[A-Za-z_][\w.]*(?::[^{}]*)?")
 
@@ -423,6 +425,11 @@ def _find_close(t: str, start: int) -> int:
 
 def plover_to_rtf(translation: str) -> str:
     """Convert a Plover-syntax translation into an RTF/CRE entry body."""
+    # Most translations are plain words: printable ASCII with nothing RTF
+    # or Plover treats specially.  Those are written unchanged, which keeps
+    # saving a large dictionary fast.
+    if _PLAIN_TEXT_RE.fullmatch(translation) and not translation.startswith("="):
+        return translation
     if _MACRO_RE.fullmatch(translation):
         return "{\\*\\cxplovermacro %s}" % _escape_rtf_text(translation[1:])
 

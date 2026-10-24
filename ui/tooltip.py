@@ -9,6 +9,8 @@ class Tooltip:
     DELAY = 500   # ms before the tip appears
 
     def __init__(self, widget, text):
+        """`text` is a string, or a function returning one, called each time
+        the tip appears (for text that is costly to keep up to date)."""
         self.widget = widget
         self.text   = text
         self._tip   = None
@@ -47,7 +49,7 @@ class Tooltip:
         self._tip.configure(background=C["border"])
         tk.Label(
             self._tip,
-            text=self.text,
+            text=self.text() if callable(self.text) else self.text,
             background=C["bg_raised"],
             foreground=C["fg"],
             relief="flat",

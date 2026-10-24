@@ -87,6 +87,14 @@ def load_metadata(dictionary_path: str) -> dict:
             data = json.load(f)
     except Exception:
         return {}
+    if not isinstance(data, dict):
+        return {}
+    # save_metadata leaves default-valued fields out; put them back so every
+    # record in memory has the full shape.
+    data = {
+        steno: {**_OMIT_WHEN_DEFAULT, **record} if isinstance(record, dict) else record
+        for steno, record in data.items()
+    }
     if path != candidates[0]:
         try:
             _ensure_dirs()
@@ -100,11 +108,30 @@ def load_metadata(dictionary_path: str) -> dict:
 # Saving
 # ------------------------------------------------------------
 
+# Fields whose default value is left out of the file.  Every reader uses
+# .get(field, default), so a missing field reads back as its default.
+_OMIT_WHEN_DEFAULT = {"brief": False, "comments": "", "bookmarked": False, "frequency": 0}
+_KEEP = object()   # sentinel: never equal to a value, so the field is kept
+
+
 def save_metadata(dictionary_path: str, metadata_dict: dict) -> None:
-    """Write all metadata for a dictionary to a single JSON file."""
+    """
+    Write all metadata for a dictionary to a single JSON file.
+
+    The file is compact (no indentation) and leaves out default-valued
+    fields: for a 370k-entry dictionary that is about a quarter of the
+    indented size, and json.dumps without indent uses the fast C encoder.
+    """
     _ensure_dirs()
     path = _metadata_file_for(dictionary_path)
-    atomic_write_text(path, json.dumps(metadata_dict, indent=2, ensure_ascii=False))
+    compact = {
+        steno: {
+            field: value for field, value in record.items()
+            if _OMIT_WHEN_DEFAULT.get(field, _KEEP) != value
+        }
+        for steno, record in metadata_dict.items()
+    }
+    atomic_write_text(path, json.dumps(compact, ensure_ascii=False, separators=(",", ":")))
 
 
 # ------------------------------------------------------------

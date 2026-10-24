@@ -1418,6 +1418,7 @@ class StenoApp(tk.Tk):
             return
 
         updated = self._apply_frequency_map_to_tab(tab, freq_map)
+        tab.invalidate_all_cached()
         # Metadata is saved together with the dictionary.  With unsaved
         # edits pending, writing it now would also write those edits'
         # metadata ahead of the dictionary, so the import waits for Save.

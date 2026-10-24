@@ -1,8 +1,12 @@
 # ui/dictionary_tab.py
+import bisect
 import copy
+import heapq
 import os
 import re
 import tkinter as tk
+from collections import Counter
+from operator import itemgetter
 from tkinter import ttk, messagebox
 from datetime import datetime
 
@@ -54,6 +58,18 @@ def _style_dialog(dialog):
 
 def _today() -> str:
     return datetime.now().strftime("%Y-%m-%d")
+
+
+class _Descending:
+    """Sort-key wrapper that orders values in reverse, so bisect can search
+    a list sorted with reverse=True."""
+    __slots__ = ("value",)
+
+    def __init__(self, value):
+        self.value = value
+
+    def __lt__(self, other):
+        return other.value < self.value
 
 
 class _Change:
@@ -140,6 +156,7 @@ class _Change:
         }
         self.tab._undo_stack.push(frame)
         self.tab._metadata_dirty = True
+        self.tab._invalidate_frame_cache(frame, "redo")
         self.tab._set_dirty(True)
         self.tab._after_entries_changed(self._conflicts_before)
         return True
@@ -229,6 +246,16 @@ class DictionaryTab(ttk.Frame):
         # Undo / redo
         self._undo_stack = UndoStack()
 
+        # Caches that keep large dictionaries fast; see _invalidate_cached.
+        #   _row_cache:      id(entry) -> (entry, display row) for column_order
+        #   _sorted_entries: every entry in the current sort order, or None
+        #   _stats:          (brief count, frequency-matched count), or None
+        #   _lowered_cache:  (_sorted_entries, their lowered translations)
+        self._row_cache: dict = {}
+        self._sorted_entries = None
+        self._stats = None
+        self._lowered_cache = None
+
         # Sorting
         self.sort_column  = "english"
         self.sort_reverse = False
@@ -273,7 +300,7 @@ class DictionaryTab(ttk.Frame):
         # right-hand cluster of the unified bar (entry count + ⓘ popover).
         self._build_search_filter_panel()
         self._build_tree()
-        self._sort_by("english", remember=False)
+        self._update_sort_headings()
         self.bind("<<DictionaryTabActivated>>", self._on_activated)
 
     # ------------------------------------------------------------------
@@ -355,6 +382,7 @@ class DictionaryTab(ttk.Frame):
     def _apply_freq_column(self, show: bool):
         """Rebuild column_order and reconfigure the sheet accordingly."""
         self.column_order = self._make_column_order(show, self.focus_mode.get())
+        self._row_cache.clear()
         # Load the new-width data first so the sheet knows the new column
         # count, then (re)apply headers / widths / alignment.
         self._refresh_tree(reset_columns=True)
@@ -365,6 +393,7 @@ class DictionaryTab(ttk.Frame):
         self.column_order = self._make_column_order(
             self.show_freq_column.get(), self.focus_mode.get()
         )
+        self._row_cache.clear()
         self._refresh_tree(reset_columns=True)
         self._configure_columns()
         self._refresh_dictionary_header()
@@ -392,10 +421,72 @@ class DictionaryTab(ttk.Frame):
     # ------------------------------------------------------------------
     def _rebuild_conflict_stenos(self):
         """Flag steno keys that appear more than once within this dictionary."""
-        counts: dict = {}
-        for e in self.entries:
-            counts[e["steno"]] = counts.get(e["steno"], 0) + 1
+        counts = Counter(map(itemgetter("steno"), self.entries))
         self.conflict_stenos = {s for s, n in counts.items() if n > 1}
+
+    # ------------------------------------------------------------------
+    # Caches
+    # ------------------------------------------------------------------
+    def _invalidate_cached(self, entries=(), stenos=(), gone=()):
+        """
+        Forget cached state made stale by a change.
+
+        A row shows its entry plus the metadata of its steno, which other
+        rows may share, so rows are dropped both for the given entries and
+        for every entry on the given stenos.  `gone` lists entries among
+        `entries` that are no longer in the dictionary.  The sort order and
+        the header statistics are brought up to date too.
+        """
+        cache = self._row_cache
+        affected = {id(e): e for e in entries}
+        for e in entries:
+            cache.pop(id(e), None)
+        stenos = set(stenos)
+        sort_uses_metadata = self.sort_column in self._METADATA_SORT_COLUMNS
+        if stenos and (cache or sort_uses_metadata):
+            for e in self.entries:
+                if e["steno"] in stenos:
+                    cache.pop(id(e), None)
+                    if sort_uses_metadata:
+                        affected[id(e)] = e
+        self._resort_entries(list(affected.values()), {id(e) for e in gone})
+        self._stats = None
+
+    _METADATA_SORT_COLUMNS = frozenset({"B", "F", "added", "modified", "comments"})
+    _INCREMENTAL_SORT_LIMIT = 2000
+
+    def _resort_entries(self, affected: list, gone_ids: set) -> None:
+        """
+        Bring the cached sort order up to date after `affected` entries were
+        added, removed or changed (`gone_ids`: the removed ones).  A small
+        change takes each affected entry out and puts the rest back by binary
+        search,
+        rather than re-sorting everything; a large one drops the order so it
+        is rebuilt in full.
+        """
+        ordered = self._sorted_entries
+        if ordered is None:
+            return
+        if len(affected) > self._INCREMENTAL_SORT_LIMIT:
+            self._sorted_entries = None
+            return
+        ids = {id(e) for e in affected}
+        kept = [e for e in ordered if id(e) not in ids]
+        key = self._sort_key(self.sort_column)
+        if self.sort_reverse:
+            base = key
+            key = lambda e: _Descending(base(e))  # noqa: E731
+        for e in affected:
+            if id(e) not in gone_ids:
+                kept.insert(bisect.bisect_right(kept, key(e), key=key), e)
+        self._sorted_entries = kept
+
+    def invalidate_all_cached(self):
+        """Forget every cached row, e.g. after metadata changed wholesale
+        (frequency import) outside a recorded change."""
+        self._row_cache.clear()
+        self._sorted_entries = None
+        self._stats = None
 
     # ------------------------------------------------------------------
     # Find highlight support (used by FindReplaceDialog)
@@ -424,23 +515,7 @@ class DictionaryTab(ttk.Frame):
             return
 
         total = len(self.entries)
-        metadata = self.metadata or {}
         conflict_count = len(self.conflict_stenos)
-        brief_count = sum(
-            1 for entry in self.entries
-            if metadata.get(entry["steno"], {}).get("brief", False)
-        )
-        freq_count = sum(
-            1 for entry in self.entries
-            if metadata.get(entry["steno"], {}).get("frequency", 0)
-        )
-        freq_pct = round((freq_count / total) * 100) if total else 0
-
-        # Cache fresh values so the popover and tooltip pull live data.
-        self._info_total = total
-        self._info_conflicts = conflict_count
-        self._info_briefs = brief_count
-        self._info_freq_pct = freq_pct
 
         # The entry-count chip is owned by _apply_filters, which knows
         # both the filtered ("X of Y") and unfiltered ("N entries") forms.
@@ -470,18 +545,31 @@ class DictionaryTab(ttk.Frame):
             else:
                 self.saved_chip.configure(text="Saved", style="HeaderSuccess.TLabel")
 
-        # Tooltip on the count chip shows path + stats
-        if hasattr(self, "_count_tooltip") and self._count_tooltip is not None:
-            self._count_tooltip.update_text(self._info_tooltip_text())
-
     def _info_tooltip_text(self) -> str:
+        """Path and statistics for the count chip's tooltip.  Built when the
+        tooltip appears, so the brief / frequency counts (a pass over every
+        entry) are only computed when someone looks, then cached."""
+        total = len(self.entries)
+        if self._stats is None:
+            metadata = self.metadata or {}
+            empty = {}
+            brief_count = freq_count = 0
+            for entry in self.entries:
+                meta = metadata.get(entry["steno"], empty)
+                if meta.get("brief", False):
+                    brief_count += 1
+                if meta.get("frequency", 0):
+                    freq_count += 1
+            self._stats = (brief_count, freq_count)
+        brief_count, freq_count = self._stats
+        freq_pct = round((freq_count / total) * 100) if total else 0
         path = self.dict_path or "Unsaved dictionary"
         return (
             f"{path}\n\n"
-            f"{self._info_total:,} entries\n"
-            f"{self._info_briefs:,} briefs\n"
-            f"{self._info_conflicts:,} conflicts\n"
-            f"{self._info_freq_pct}% frequency matched"
+            f"{total:,} entries\n"
+            f"{brief_count:,} briefs\n"
+            f"{len(self.conflict_stenos):,} conflicts\n"
+            f"{freq_pct}% frequency matched"
         )
 
     # ------------------------------------------------------------------
@@ -553,7 +641,7 @@ class DictionaryTab(ttk.Frame):
             right, textvariable=self.entry_count_var, style="HeaderChip.TLabel"
         )
         self.count_chip.pack(side=tk.RIGHT, padx=(0, 8))
-        self._count_tooltip = Tooltip(self.count_chip, "")
+        self._count_tooltip = Tooltip(self.count_chip, self._info_tooltip_text)
 
         # ---------------------------------------------------------------
         # Body (animated)
@@ -968,6 +1056,7 @@ class DictionaryTab(ttk.Frame):
         self.entries = entries
         self.metadata = ensure_metadata(entries, metadata or {})
         self._metadata_dirty = False
+        self.invalidate_all_cached()
         self._rebuild_conflict_stenos()
         self._undo_stack.clear()
         self._refresh_dictionary_header()
@@ -1171,8 +1260,21 @@ class DictionaryTab(ttk.Frame):
                 self.metadata[steno] = copy.deepcopy(meta)
 
         self._metadata_dirty = True
+        self._invalidate_frame_cache(frame, direction)
         self._set_dirty(self._undo_stack.is_dirty)
         self._after_entries_changed(None)
+
+    def _invalidate_frame_cache(self, frame: dict, direction: str) -> None:
+        """Drop cached state touched by an undo frame that was just applied
+        ("redo", which is also how a new change is first applied) or
+        reversed ("undo")."""
+        removed = [ref for ref, _pos in frame["removed"]]
+        self._invalidate_cached(
+            entries=[*frame["added"], *removed,
+                     *(ref for ref, _old, _new in frame["changed"])],
+            stenos=frame["meta_before"].keys(),
+            gone=frame["added"] if direction == "undo" else removed,
+        )
 
     # ------------------------------------------------------------------
     # Cross-dictionary receive (copy / move)
@@ -1404,73 +1506,85 @@ class DictionaryTab(ttk.Frame):
                 top_n = max(1, int(self.filter_top_freq_n_var.get()))
             except (ValueError, TypeError):
                 top_n = 500
-            scored = sorted(
+            scored = heapq.nlargest(
+                top_n,
                 (
                     (e["steno"], (metadata.get(e["steno"]) or {}).get("frequency", 0))
                     for e in self.entries
                 ),
-                key=lambda x: x[1],
-                reverse=True,
+                key=itemgetter(1),
             )
             # Entries with score 0 are never included regardless of N
-            top_n_stenos = {steno for steno, score in scored[:top_n] if score > 0}
+            top_n_stenos = {steno for steno, score in scored if score > 0}
         else:
             top_n_stenos = None
 
-        results = []
-        for entry in self.entries:
-            steno   = entry["steno"]
-            # Guard against null English values (used in some steno dictionaries
-            # as stroke suppressors).  Treat them as empty strings throughout.
-            english = entry["english"] or ""
+        # Walking the entries in sort order means the results come out
+        # already sorted, so typing a search never re-sorts.
+        if not (text_active or steno_active or any_filter):
+            results = list(self._entries_in_sort_order())
+        elif text_active and not match_case and not steno_active and not any_filter:
+            # The usual case while typing: one comparison per entry against
+            # cached lowered translations.
+            match = {"Contains": str.__contains__, "Begins With": str.startswith,
+                     "Ends With": str.endswith}.get(text_method)
+            pairs = zip(self._entries_in_sort_order(), self._lowered_texts())
+            results = [e for e, text in pairs if match and match(text, text_q)]
+        else:
+            results = []
+            for entry in self._entries_in_sort_order():
+                steno   = entry["steno"]
+                # Guard against null English values (used in some steno dictionaries
+                # as stroke suppressors).  Treat them as empty strings throughout.
+                english = entry["english"] or ""
 
-            # Steno axis
-            if steno_active and not steno_matches(
-                steno, steno_q, steno_method, whole_strokes
-            ):
-                continue
-
-            # The text axis can run case-sensitively or not.  The lowered
-            # form is also used by the written-numbers filter, so we may
-            # need it even when match_case is on for the text search.
-            need_lower = (text_active and not match_case) or f_written
-            english_lower = english.lower() if need_lower else None
-
-            # Text axis
-            if text_active:
-                haystack = english.strip() if match_case else english_lower.strip()
-                if not text_matches(haystack, text_q, text_method):
+                # Steno axis
+                if steno_active and not steno_matches(
+                    steno, steno_q, steno_method, whole_strokes
+                ):
                     continue
 
-            # Predicate filters
-            if any_filter:
-                # Metadata-based predicates only fetch metadata if needed
-                if any_meta_filter:
-                    meta = metadata.get(steno, {})
-                    if f_comments and not meta.get("comments", "").strip():
+                # The text axis can run case-sensitively or not.  The lowered
+                # form is also used by the written-numbers filter, so we may
+                # need it even when match_case is on for the text search.
+                need_lower = (text_active and not match_case) or f_written
+                english_lower = english.lower() if need_lower else None
+
+                # Text axis
+                if text_active:
+                    haystack = english.strip() if match_case else english_lower.strip()
+                    if not text_matches(haystack, text_q, text_method):
                         continue
-                    if f_brief and not meta.get("brief", False):
+
+                # Predicate filters
+                if any_filter:
+                    # Metadata-based predicates only fetch metadata if needed
+                    if any_meta_filter:
+                        meta = metadata.get(steno, {})
+                        if f_comments and not meta.get("comments", "").strip():
+                            continue
+                        if f_brief and not meta.get("brief", False):
+                            continue
+                        if f_has_freq and not meta.get("frequency", 0):
+                            continue
+
+                    if f_bookmarked and steno not in bookmarked_stenos:
                         continue
-                    if f_has_freq and not meta.get("frequency", 0):
+                    if f_capitalised and not (english and english[0].isupper()):
+                        continue
+                    if f_digits and not digit_re.search(english):
+                        continue
+                    if f_written:
+                        if not (set(word_re.findall(english_lower)) & written_numbers):
+                            continue
+                    if f_punct and not punct_re.search(english):
+                        continue
+                    if f_conflict and steno not in conflict_stenos:
+                        continue
+                    if f_top_freq and steno not in top_n_stenos:
                         continue
 
-                if f_bookmarked and steno not in bookmarked_stenos:
-                    continue
-                if f_capitalised and not (english and english[0].isupper()):
-                    continue
-                if f_digits and not digit_re.search(english):
-                    continue
-                if f_written:
-                    if not (set(word_re.findall(english_lower)) & written_numbers):
-                        continue
-                if f_punct and not punct_re.search(english):
-                    continue
-                if f_conflict and steno not in conflict_stenos:
-                    continue
-                if f_top_freq and steno not in top_n_stenos:
-                    continue
-
-            results.append(entry)
+                results.append(entry)
 
         self.filtered_entries = results
 
@@ -1502,10 +1616,18 @@ class DictionaryTab(ttk.Frame):
             except Exception:
                 pass
 
-        if self.sort_column:
-            self._sort_by(self.sort_column, remember=False)
-        else:
-            self._refresh_tree()
+        self._refresh_tree()
+        self._update_sort_headings()
+
+    def _lowered_texts(self) -> list:
+        """Lowered, stripped translations parallel to _entries_in_sort_order(),
+        cached until that order is rebuilt."""
+        ordered = self._entries_in_sort_order()
+        cached = self._lowered_cache
+        if cached is None or cached[0] is not ordered:
+            texts = [(e["english"] or "").lower().strip() for e in ordered]
+            cached = self._lowered_cache = (ordered, texts)
+        return cached[1]
 
     def _text_matches(self, english_lower: str, query: str, method: str) -> bool:
         """Match the English translation against the query using the given method."""
@@ -1557,28 +1679,44 @@ class DictionaryTab(ttk.Frame):
     # Sorting
     # ------------------------------------------------------------------
     def _sort_by(self, column, remember=True):
+        """Sort by column (a header click toggles direction) and redisplay."""
         if self.sort_column == column and remember:
             self.sort_reverse = not self.sort_reverse
         elif remember:
             self.sort_column  = column
             self.sort_reverse = False
+        self._sorted_entries = None
+        self._apply_filters()
 
-        def key(entry):
-            if column == "S": return entry["steno"].count("/") + 1
-            if column == "W": return len((entry.get("english") or "").split())
-            if column == "F": return (self.metadata or {}).get(entry["steno"], {}).get("frequency", 0)
-            if column == "B":
-                return 1 if (self.metadata or {}).get(entry["steno"], {}).get("brief") else 0
-            if column in ("added", "modified", "comments"):
-                meta = (self.metadata or {}).get(entry["steno"], {})
-                k    = "date_added" if column == "added" else column
-                return meta.get(k, "").lower()
-            v = entry.get(column, "") or ""
+    def _entries_in_sort_order(self) -> list:
+        """Every entry in the current sort order.  Kept between filter passes
+        and rebuilt only after a change or a new sort (see _invalidate_cached)."""
+        if self._sorted_entries is None:
+            self._sorted_entries = sorted(
+                self.entries, key=self._sort_key(self.sort_column),
+                reverse=self.sort_reverse,
+            )
+        return self._sorted_entries
+
+    def _sort_key(self, column):
+        metadata = self.metadata or {}
+        empty = {}
+        if column == "S":
+            return lambda e: e["steno"].count("/") + 1
+        if column == "W":
+            return lambda e: len((e.get("english") or "").split())
+        if column == "F":
+            return lambda e: metadata.get(e["steno"], empty).get("frequency", 0)
+        if column == "B":
+            return lambda e: 1 if metadata.get(e["steno"], empty).get("brief") else 0
+        if column in ("added", "modified", "comments"):
+            field = "date_added" if column == "added" else column
+            return lambda e: (metadata.get(e["steno"], empty).get(field) or "").lower()
+
+        def key(e):
+            v = e.get(column, "") or ""
             return v.lower() if isinstance(v, str) else v
-
-        self.filtered_entries.sort(key=key, reverse=self.sort_reverse)
-        self._refresh_tree()
-        self._update_sort_headings()
+        return key
 
     def _heading_text(self, col) -> str:
         base = self.HEADINGS[col]
@@ -1601,10 +1739,10 @@ class DictionaryTab(ttk.Frame):
         Rebuild the sheet from self.filtered_entries.
 
         The sheet is virtualized, so every filtered row is loaded (no cap, no
-        pagination) and only the on-screen cells are drawn.  The full row
-        matrix is built in Python and handed to the sheet in one call; the
-        bookmark / conflict row-index sets are computed in the same pass and
-        applied as highlights (zebra striping is the sheet's alternate_color).
+        pagination) and only the on-screen cells are drawn.  Each entry's
+        display row is built once and cached (_display_row), so redrawing
+        after a search only gathers rows.  Bookmark / conflict highlights are
+        applied as row-index sets (zebra striping is the sheet's alternate_color).
 
         reset_columns=True recreates the column positions, which is required
         when the number of columns changes (freq / focus toggle); normal
@@ -1614,65 +1752,38 @@ class DictionaryTab(ttk.Frame):
             return
 
         prev_selected = self._selected_stenos()
+        filtered = self.filtered_entries
 
-        metadata          = self.metadata or {}
+        cache = self._row_cache
+
+        def build(entry):
+            row = self._display_row(entry)
+            cache[id(entry)] = (entry, row)
+            return row
+
+        # The identity check guards against a recycled id() after an entry
+        # object was freed.  Comprehensions keep these 100k-row passes fast.
+        rows = [
+            hit[1] if hit is not None and hit[0] is entry else build(entry)
+            for entry, hit in zip(filtered, map(cache.get, map(id, filtered)))
+        ]
+
+        bm_rows, cf_rows, both_rows, to_reselect = [], [], [], []
         bookmarked_stenos = self.bookmarked_stenos
         conflict_stenos   = self.conflict_stenos
-        max_chars         = MAX_COMMENT_CHARS
-        cols_tuple        = tuple(self.column_order)
-        n_cols            = len(cols_tuple)
-
-        rows        = []
-        bm_rows     = []
-        cf_rows     = []
-        both_rows   = []
-        to_reselect = []
-        empty_meta  = {}
-
-        for i, entry in enumerate(self.filtered_entries):
-            steno   = entry["steno"]
-            english = entry.get("english") or ""
-            meta    = metadata.get(steno, empty_meta)
-
-            comments = meta.get("comments", "")
-            if comments and len(comments) > max_chars:
-                comments = comments[:max_chars - 3] + "..."
-
-            freq = meta.get("frequency", 0)
-
-            row = [""] * n_cols
-            for idx, col in enumerate(cols_tuple):
-                if col == "steno":
-                    row[idx] = steno
-                elif col == "english":
-                    row[idx] = english
-                elif col == "S":
-                    row[idx] = steno.count("/") + 1
-                elif col == "W":
-                    row[idx] = len(english.split())
-                elif col == "B":
-                    row[idx] = "✓" if meta.get("brief", False) else ""
-                elif col == "F":
-                    row[idx] = f"{freq:,}" if freq else ""
-                elif col == "added":
-                    row[idx] = meta.get("date_added", entry.get("date_added", ""))
-                elif col == "modified":
-                    row[idx] = meta.get("modified", entry.get("modified", ""))
-                elif col == "comments":
-                    row[idx] = comments
-            rows.append(row)
-
-            is_bm = steno in bookmarked_stenos
-            is_cf = steno in conflict_stenos
-            if is_bm and is_cf:
-                both_rows.append(i)
-            elif is_bm:
-                bm_rows.append(i)
-            elif is_cf:
-                cf_rows.append(i)
-
-            if steno in prev_selected:
-                to_reselect.append(i)
+        if bookmarked_stenos or conflict_stenos or prev_selected:
+            stenos = list(map(itemgetter("steno"), filtered))
+            if bookmarked_stenos and conflict_stenos:
+                both_rows = [i for i, s in enumerate(stenos)
+                             if s in bookmarked_stenos and s in conflict_stenos]
+            if bookmarked_stenos:
+                bm_rows = [i for i, s in enumerate(stenos)
+                           if s in bookmarked_stenos and s not in conflict_stenos]
+            if conflict_stenos:
+                cf_rows = [i for i, s in enumerate(stenos)
+                           if s in conflict_stenos and s not in bookmarked_stenos]
+            if prev_selected:
+                to_reselect = [i for i, s in enumerate(stenos) if s in prev_selected]
 
         self.sheet.set_sheet_data(
             rows, reset_highlights=True, redraw=False,
@@ -1687,6 +1798,37 @@ class DictionaryTab(ttk.Frame):
             self._select_rows(to_reselect)
         else:
             self.sheet.refresh()
+
+    def _display_row(self, entry) -> list:
+        """The table cells for one entry, in column_order."""
+        steno   = entry["steno"]
+        english = entry.get("english") or ""
+        meta    = (self.metadata or {}).get(steno, {})
+        row = []
+        for col in self.column_order:
+            if col == "steno":
+                row.append(steno)
+            elif col == "english":
+                row.append(english)
+            elif col == "S":
+                row.append(steno.count("/") + 1)
+            elif col == "W":
+                row.append(len(english.split()))
+            elif col == "B":
+                row.append("✓" if meta.get("brief", False) else "")
+            elif col == "F":
+                freq = meta.get("frequency", 0)
+                row.append(f"{freq:,}" if freq else "")
+            elif col == "added":
+                row.append(meta.get("date_added", entry.get("date_added", "")))
+            elif col == "modified":
+                row.append(meta.get("modified", entry.get("modified", "")))
+            elif col == "comments":
+                comments = meta.get("comments", "")
+                if comments and len(comments) > MAX_COMMENT_CHARS:
+                    comments = comments[:MAX_COMMENT_CHARS - 3] + "..."
+                row.append(comments)
+        return row
 
     # ------------------------------------------------------------------
     # Conflict warning banner

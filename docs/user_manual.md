@@ -684,6 +684,8 @@ Each metadata file is named after its dictionary. For example, a dictionary at C
 }  
 }
 
+To keep the file small for large dictionaries, it is written without indentation, and fields that hold their default value (brief false, comments empty, bookmarked false, frequency 0) are left out. StenoLab reads a missing field as its default. The example above shows every field for clarity; on disk this entry is stored as `"KAT":{"date_added":"2024-08-01","modified":"2024-09-12","comments":"extracted from Lapwing"}`.
+
 The frequency field holds a usage-frequency score for the entry's translation. It is populated by **Tools → Import Frequency List** and is read by the *Has frequency* and *Top N by frequency* filters (Section 7) and the optional **F** column (Section 4). A score of 0 means no frequency data has been matched to that entry. The bookmarked field is unused in practice (bookmarks are session-only, see Section 9) but the field is retained in the schema for future flexibility.
 
 If a metadata file is missing or unreadable, StenoLab builds a fresh one in memory using today's date for both Added and Modified fields. There is no harm in deleting metadata files; it just means history information for that dictionary is lost.
