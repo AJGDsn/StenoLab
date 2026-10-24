@@ -885,6 +885,22 @@ class DictionaryTab(ttk.Frame):
                     pass
         self._apply_filters()
 
+    def visible_entries(self) -> list:
+        """The rows the table is showing, in its order (current search,
+        filters and sort applied)."""
+        if hasattr(self, "searchbar"):
+            self.searchbar.flush_pending()
+        return list(self.filtered_entries)
+
+    def active_view_description(self) -> str:
+        """The active search and filters in words, from the same labels as
+        the header chips, e.g. 'Text: "ca", Conflicts' or 'All entries'."""
+        labels = []
+        if hasattr(self, "searchbar"):
+            labels += [label for label, _clear in self.searchbar.chip_defs()]
+        labels += [label for label, var in self._filter_chip_defs() if var.get()]
+        return ", ".join(labels) if labels else "All entries"
+
     def _filter_chip_defs(self):
         return [
             ("Comments", self.filter_has_comments),

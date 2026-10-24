@@ -1,0 +1,117 @@
+/* StenoLab Viewer: colours follow the desktop app's palettes (ui/theme.py). */
+:root {
+  --bg: #f2f4f7; --panel: #ffffff; --alt: #f6f8fa; --fg: #1f252c; --dim: #66717e;
+  --border: #d2dae5; --accent: #178f88; --accent-soft: #d8f2ef; --input: #ffffff;
+  --danger: #b72d43;
+  --row: 52px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17191f; --panel: #222630; --alt: #262b36; --fg: #f0eee8; --dim: #aeb4bf;
+    --border: #3a4354; --accent: #35bdb4; --accent-soft: #163f44; --input: #2a2f3a;
+    --danger: #ff8a98;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; display: flex; flex-direction: column;
+  background: var(--bg); color: var(--fg); font: 16px/1.4 var(--font);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  -webkit-text-size-adjust: 100%;
+}
+button, select, input { font: inherit; color: inherit; }
+button {
+  min-height: 44px; padding: 0 16px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--panel);
+}
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+button.danger { color: var(--danger); }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.bar {
+  display: flex; align-items: center; gap: 12px; padding: 8px 16px;
+  border-bottom: 1px solid var(--border); background: var(--bg);
+}
+.bar h1 { font-size: 18px; margin: 0; letter-spacing: 0.01em; }
+.tabs { display: flex; gap: 6px; overflow-x: auto; flex: 1; min-width: 0; scrollbar-width: none; }
+.tabs button {
+  white-space: nowrap; min-height: 36px; padding: 0 12px; border-radius: 18px;
+  background: transparent; color: var(--dim);
+}
+.tabs button[aria-selected="true"] { background: var(--accent-soft); color: var(--fg); border-color: var(--accent); }
+.tabs button.compare { font-weight: 600; }
+
+main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+main[hidden] { display: none; }
+
+.search { display: grid; gap: 8px; padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--border); }
+.search-row { display: grid; grid-template-columns: 96px 140px 1fr; gap: 8px; align-items: center; }
+.search-row label { color: var(--dim); font-size: 14px; }
+.search-row select, .search-row input {
+  min-height: 44px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--input); padding: 0 10px; min-width: 0;
+}
+@media (max-width: 600px) {
+  .search-row { grid-template-columns: 1fr 1fr; }
+  .search-row label { display: none; }
+}
+
+.list-head {
+  display: grid; grid-template-columns: minmax(120px, 32%) 1fr auto; align-items: center;
+  border-bottom: 1px solid var(--border); background: var(--bg); padding: 0 16px;
+}
+.list-head .col {
+  border: 0; background: transparent; text-align: left; padding: 0; font-weight: 600;
+  color: var(--dim); font-size: 14px;
+}
+.list-head .col[data-dir]::after { content: " ▲"; color: var(--accent); }
+.list-head .col[data-dir="desc"]::after { content: " ▼"; }
+.count { color: var(--dim); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+.list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; position: relative; background: var(--panel); }
+#list-inner { position: relative; }
+.row {
+  position: absolute; left: 0; right: 0; height: var(--row);
+  display: grid; grid-template-columns: minmax(120px, 32%) 1fr; column-gap: 12px;
+  align-content: center; padding: 0 16px; cursor: pointer;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+}
+.row:nth-child(even) { background: var(--alt); }
+.row:active { background: var(--accent-soft); }
+.row .steno, .row .english { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .comment {
+  grid-column: 2; font-size: 13px; color: var(--dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dict-info { margin: 0; padding: 8px 16px calc(8px + env(safe-area-inset-bottom)); color: var(--dim); font-size: 13px; display: flex; gap: 12px; align-items: center; }
+.dict-info button { min-height: 32px; font-size: 13px; padding: 0 10px; margin-left: auto; }
+
+.compare-results { flex: 1; overflow-y: auto; padding: 8px 16px calc(16px + env(safe-area-inset-bottom)); }
+.compare-group { margin: 12px 0; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.compare-group h3 { margin: 0; padding: 10px 14px; font-size: 14px; color: var(--dim); border-bottom: 1px solid var(--border); }
+.compare-group .hit { display: grid; grid-template-columns: minmax(120px, 32%) 1fr; column-gap: 12px; padding: 10px 14px; }
+.compare-group .hit + .hit { border-top: 1px solid color-mix(in srgb, var(--border) 45%, transparent); }
+.compare-group .hit .comment { grid-column: 2; font-size: 13px; color: var(--dim); white-space: pre-wrap; }
+.compare-group .none { padding: 10px 14px; color: var(--dim); font-style: italic; }
+.compare-group .note { padding: 6px 14px 10px; color: var(--dim); font-size: 13px; }
+
+.empty { align-items: center; justify-content: center; text-align: center; padding: 32px; color: var(--dim); }
+.empty h2 { color: var(--fg); margin: 0 0 8px; font-size: 20px; }
+.empty p { max-width: 34em; margin: 6px 0; }
+
+.sheet {
+  border: 1px solid var(--border); border-radius: 14px; padding: 20px; width: min(560px, 92vw);
+  background: var(--panel); color: var(--fg);
+}
+.sheet::backdrop { background: rgba(0, 0, 0, 0.45); }
+.sheet dl { margin: 0 0 16px; display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; }
+.sheet dt { color: var(--dim); font-size: 14px; }
+.sheet dd { margin: 0; word-break: break-word; }
+.sheet .comment { white-space: pre-wrap; }
+.sheet-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.steno { font-variant-ligatures: none; letter-spacing: 0.02em; }

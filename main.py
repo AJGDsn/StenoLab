@@ -130,6 +130,11 @@ class StenoApp(tk.Tk):
         )
         file_menu.add_separator()
         file_menu.add_command(
+            label="Export for iPad...",
+            command=self._export_for_ipad,
+        )
+        file_menu.add_separator()
+        file_menu.add_command(
             label="Close Dictionary",
             command=self._close_current_dictionary,
         )
@@ -544,6 +549,50 @@ class StenoApp(tk.Tk):
             return
         if hasattr(tab, "_refresh_dictionary_header"):
             tab._refresh_dictionary_header()
+
+    # ------------------------------------------------------------
+    # Export for iPad
+    # ------------------------------------------------------------
+    def _export_for_ipad(self):
+        """Write the active tab's visible rows, with their comments, as a
+        review file for the iPad viewer (web/).  The current search and
+        filters decide what is exported."""
+        from tkinter import filedialog
+        from logic.review_export import build_review, write_review
+
+        tab = self._get_active_tab()
+        if tab is None:
+            messagebox.showinfo("Export for iPad", "Open a dictionary first.")
+            return
+        entries = tab.visible_entries()
+        if not entries:
+            messagebox.showinfo("Export for iPad", "No entries are showing to export.")
+            return
+
+        description = tab.active_view_description()
+        suffix = "all entries" if description == "All entries" else "review"
+        path = filedialog.asksaveasfilename(
+            parent=self,
+            title="Export for iPad",
+            initialdir=os.path.dirname(tab.dict_path) if tab.dict_path else None,
+            initialfile=f"{tab.name} - {suffix}.json",
+            defaultextension=".json",
+            filetypes=[("StenoLab review file", "*.json")],
+        )
+        if not path:
+            return
+        review = build_review(entries, tab.metadata, name=tab.name,
+                              source=tab.dict_path, description=description)
+        try:
+            write_review(path, review)
+        except OSError as e:
+            messagebox.showerror("Export for iPad", f"Could not write the file:\n\n{e}")
+            return
+        messagebox.showinfo(
+            "Export for iPad",
+            f"Exported {len(entries):,} entries ({description}) to "
+            f"{os.path.basename(path)}.\n\nOpen it in the StenoLab viewer on the iPad.",
+        )
 
     # ------------------------------------------------------------
     # Convert Dictionary

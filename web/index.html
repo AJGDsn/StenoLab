@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>StenoLab Viewer</title>
+  <meta name="description" content="Read-only viewer for steno dictionaries and StenoLab review files.">
+  <meta name="theme-color" content="#17191f" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f2f4f7" media="(prefers-color-scheme: light)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="StenoLab">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="bar">
+    <h1>StenoLab</h1>
+    <nav id="tabs" class="tabs" aria-label="Dictionaries"></nav>
+    <button id="open-btn" class="primary" type="button">Open</button>
+    <input id="file-input" type="file" multiple hidden
+           accept=".json,.rtf,application/json,application/rtf,text/rtf">
+  </header>
+
+  <main id="dict-view" hidden>
+    <section class="search" aria-label="Search">
+      <div class="search-row">
+        <label for="text-q">Translation</label>
+        <select id="text-method" aria-label="Translation match">
+          <option>Begins With</option><option>Contains</option><option>Ends With</option>
+        </select>
+        <input id="text-q" type="search" placeholder="Search translations"
+               autocapitalize="off" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="search-row">
+        <label for="steno-q">Steno</label>
+        <select id="steno-method" aria-label="Steno match">
+          <option>Contains</option><option>Begins With</option><option>Ends With</option>
+        </select>
+        <input id="steno-q" type="search" placeholder="Search steno"
+               autocapitalize="characters" autocomplete="off" spellcheck="false">
+      </div>
+    </section>
+    <div class="list-head">
+      <button type="button" class="col steno" data-sort="0">Steno</button>
+      <button type="button" class="col english" data-sort="1">Translation</button>
+      <span id="count" class="count"></span>
+    </div>
+    <div id="list" class="list" tabindex="0"><div id="list-inner"></div></div>
+    <p id="dict-info" class="dict-info"></p>
+  </main>
+
+  <main id="compare-view" hidden>
+    <section class="search" aria-label="Compare">
+      <div class="search-row">
+        <label for="compare-q">Compare</label>
+        <select id="compare-field" aria-label="Compare by">
+          <option value="1">Translation</option><option value="0">Steno</option>
+        </select>
+        <input id="compare-q" type="search" placeholder="A word to look up in every dictionary"
+               autocapitalize="off" autocomplete="off" spellcheck="false">
+      </div>
+    </section>
+    <div id="compare-results" class="compare-results"></div>
+  </main>
+
+  <main id="empty-view" class="empty">
+    <h2>No dictionaries yet</h2>
+    <p>Tap <strong>Open</strong> and choose a dictionary from Files: a Plover JSON or
+       RTF/CRE file, or a review file exported from StenoLab (File → Export for iPad),
+       which includes your comments.</p>
+    <p>Files are read on this iPad and kept here for next time. Nothing is uploaded.</p>
+  </main>
+
+  <dialog id="detail" class="sheet">
+    <form method="dialog">
+      <dl>
+        <dt>Steno</dt><dd id="detail-steno" class="steno"></dd>
+        <dt>Translation</dt><dd id="detail-english"></dd>
+        <dt id="detail-comment-label">Comment</dt><dd id="detail-comment" class="comment"></dd>
+      </dl>
+      <div class="sheet-actions">
+        <button id="detail-compare" type="button" class="primary">Compare in all dictionaries</button>
+        <button type="submit">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="remove-confirm" class="sheet">
+    <form method="dialog">
+      <p id="remove-text"></p>
+      <div class="sheet-actions">
+        <button value="remove" class="danger">Remove</button>
+        <button value="cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="rtf.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

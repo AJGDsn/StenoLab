@@ -1,0 +1,40 @@
+# Publishes the iPad viewer (web/) and the user manual to GitHub Pages:
+#   https://ajgdsn.github.io/StenoLab/          the viewer
+#   https://ajgdsn.github.io/StenoLab/manual.html
+# Runs when either changes on main, or by hand from the Actions tab.
+name: Publish viewer
+
+on:
+  push:
+    branches: [main]
+    paths: ["web/**", "docs/user_manual.html", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble site
+        run: |
+          mkdir _site
+          cp -r web/. _site/
+          cp docs/user_manual.html _site/manual.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4
