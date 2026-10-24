@@ -796,14 +796,31 @@ class DictionaryTab(ttk.Frame):
         self.search_config = merged
         self._apply_filters()
 
-    def focus_search_text(self, append_char=None):
-        """Expose the search bar's text-field focus for type-ahead routing."""
+    def type_ahead(self, char=None, backspace=False) -> bool:
+        """
+        Route a keystroke typed outside any input field into the text search.
+
+        With the Search & Filters panel open, the text field takes focus and
+        the character.  With it closed, the panel stays closed: the query is
+        edited directly (the header's search chip shows it) and focus stays
+        on the table, so further keystrokes keep arriving here.  Returns True
+        if the keystroke was used.
+        """
         if not hasattr(self, "searchbar"):
-            return
-        if not self.unified_expanded:
-            self.expand_unified(focus_field="text", append_char=append_char)
+            return False
+        if self.unified_expanded:
+            if backspace:
+                return False
+            self.searchbar.focus_text_entry(append_char=char)
+            return True
+        query = self.searchbar.text_query_var
+        if backspace:
+            if not query.get():
+                return False
+            query.set(query.get()[:-1])
         else:
-            self.searchbar.focus_text_entry(append_char=append_char)
+            query.set(query.get() + char)
+        return True
 
     def _update_no_match_hint(self, *, showing: int, search_active: bool):
         """Append a "no matches" indicator + a Clear-search affordance to
@@ -1392,6 +1409,59 @@ class DictionaryTab(ttk.Frame):
         if rows:
             self.sheet.see(rows[0], redraw=False)
         self.sheet.refresh()
+
+    # ------------------------------------------------------------------
+    # Following a selection across tabs
+    # ------------------------------------------------------------------
+    def follow_target(self):
+        """
+        What the current selection asks other tabs to find, as
+        (field, text, whole_row), or None.  A selected steno cell is
+        matched by steno; a translation cell, a whole row or any other
+        column's cell by translation.
+        """
+        if not hasattr(self, "sheet"):
+            return None
+        selected = self.sheet.get_currently_selected()
+        if not selected:
+            return None
+        entry = self._entry_for_row(selected.row)
+        if entry is None:
+            return None
+        whole_row = selected.type_ == "rows"
+        column = None
+        if not whole_row and 0 <= selected.column < len(self.column_order):
+            column = self.column_order[selected.column]
+        field = "steno" if column == "steno" else "english"
+        text = (entry.get(field) or "").strip()
+        return (field, text, whole_row) if text else None
+
+    def follow(self, target) -> bool:
+        """
+        Select and scroll to the row matching `target` (from another tab's
+        follow_target), looking only among the rows this tab currently
+        shows: its search and filters are left as they are.  An exact
+        match, ignoring case, wins; otherwise the first row that begins
+        with the text.  With no match nothing changes and False is returned.
+        """
+        field, text, whole_row = target
+        needle = text.lower()
+        values = [(e.get(field) or "").strip().lower() for e in self.filtered_entries]
+        try:
+            row = values.index(needle)
+        except ValueError:
+            row = next((i for i, v in enumerate(values) if v.startswith(needle)), None)
+        if row is None:
+            return False
+        if whole_row:
+            self._select_rows([row])
+        else:
+            column = self.column_order.index(field)
+            self.sheet.deselect("all", redraw=False)
+            self.sheet.select_cell(row, column, redraw=False, run_binding_func=False)
+            self.sheet.see(row, column, redraw=False)
+            self.sheet.refresh()
+        return True
 
     def select_and_see_row(self, row):
         """Public: select a single filtered-row index and scroll it into view."""

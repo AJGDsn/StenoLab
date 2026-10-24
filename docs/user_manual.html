@@ -59,6 +59,7 @@ hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
 <li><a href="#3-working-with-dictionaries">3. Working with Dictionaries</a><ul>
 <li><a href="#opening-a-dictionary">Opening a dictionary</a></li>
 <li><a href="#multiple-dictionaries">Multiple dictionaries</a></li>
+<li><a href="#comparing-a-word-across-dictionaries">Comparing a word across dictionaries</a></li>
 <li><a href="#saving">Saving</a></li>
 <li><a href="#closing-a-dictionary">Closing a dictionary</a></li>
 <li><a href="#the-unsaved-changes-indicator">The unsaved-changes indicator</a></li>
@@ -258,6 +259,9 @@ hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
 <p>The file picker also accepts RTF/CRE dictionaries (.rtf), the interchange format exported by Eclipse, Case CATalyst, Digital CAT, Plover and other CAT software. See <a href="#rtfcre-dictionaries">RTF/CRE dictionaries</a> in Section 12 for how their formatting is shown.</p>
 <h2 id="multiple-dictionaries">Multiple dictionaries</h2>
 <p>Each opened dictionary becomes a new tab. There is no fixed limit on how many can be open at once. Tabs persist across sessions: whichever dictionaries are open when the application closes will reopen on the next launch.</p>
+<h2 id="comparing-a-word-across-dictionaries">Comparing a word across dictionaries</h2>
+<p>Select a cell, then switch tabs: the new tab finds the same word and scrolls to it, so you can see how each dictionary writes it. A selected steno cell is matched by steno. A translation cell, a whole row or any other cell is matched by translation. Capitals are ignored, and an exact match is preferred; otherwise the first entry beginning with the text is chosen.</p>
+<p>Only the rows the new tab is currently showing are searched. Its search and filters are never changed to find a match, and if nothing matches, the tab is left exactly as it was.</p>
 <h2 id="saving">Saving</h2>
 <p>File → Save Dictionary, or Ctrl+S. The active tab's dictionary is written back to its original file. Before each save StenoLab writes a timestamped backup of the previous file contents to its backup folder, so a previous version can always be recovered; see Section 12 for details on backups and restoration.</p>
 <p>Saving writes only the steno-to-translation mapping. Per-entry metadata (dates, brief flag, comments) lives in a separate file and is saved automatically whenever an entry is edited; see Section 12.</p>
@@ -420,8 +424,8 @@ hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
 <p>The Scope dropdown determines which dictionaries are searched. "Current Dictionary" — the default — searches only the active tab. "All Dictionaries" searches every open tab simultaneously, with each tab's filter panel reflecting the matches found in that tab. This is useful when looking for an entry without remembering which dictionary it lives in, or when comparing how the same word is outlined across several reference dictionaries.</p>
 <h2 id="type-ahead-filtering">Type-ahead filtering</h2>
 <p>StenoLab filters as you type, with no Search button to press. Each keystroke updates the visible rows immediately.</p>
-<p>More unusually: keystrokes received while the application has focus but no input field is selected are routed automatically to the Text search field, expanding the search panel first if it is currently collapsed. So the workflow "open the program, type the word you're looking for, see results" works without any prior clicks. The character is treated as Begins-With text, the most common search reflex.</p>
-<p>Type-ahead routing skips when an input field is already focused (so typing in the Find &amp; Replace dialog or an Edit dialog works normally), when modifier keys are held (Ctrl, Alt), and on navigation keys (arrows, Page Up, Home), function keys (F1–F12), and editing keys (Backspace, Delete, Enter, Escape).</p>
+<p>More unusually: keystrokes received while the application has focus but no input field is selected are routed automatically to the Text search. If the Search &amp; Filters panel is open, the Text field takes the keystroke; if it is closed, it stays closed and the text you type appears as a search chip in the panel's header. Backspace removes the last character in that case. So the workflow "open the program, type the word you're looking for, see results" works without any prior clicks. The character is treated as Begins-With text, the most common search reflex.</p>
+<p>Type-ahead routing skips when an input field is already focused (so typing in the Find &amp; Replace dialog or an Edit dialog works normally), when modifier keys are held (Ctrl, Alt), and on navigation keys (arrows, Page Up, Home), function keys (F1–F12), and editing keys (Delete, Enter, Escape, and Backspace while the panel is open).</p>
 <p>Steno-axis searches are not reachable through type-ahead. To search by stroke, click into the Steno field first; the program assumes that someone already thinking in steno will know to do this.</p>
 <h2 id="the-active-search-hint">The active-search hint</h2>
 <p>When the search panel is collapsed and a search is active, the panel header shows a brief summary of what is currently being filtered, for example:</p>
@@ -583,7 +587,7 @@ hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
 <p>Bookmarks are not persisted between sessions. They are a working-memory aid, not a long-term tag. Closing the application or closing the dictionary tab clears them. For permanent tagging, use the Comments field on individual entries.</p>
 <h1 id="10-view-options">10. View Options</h1>
 <h2 id="dark-and-light-mode">Dark and light mode</h2>
-<p>View → Dark Mode is a checkbox toggle. The application defaults to dark mode on first launch. The choice persists across sessions.</p>
+<p>View → Light and View → Dark switch the theme; the current one is ticked. The application defaults to dark mode on first launch. The choice persists across sessions.</p>
 <p>Dark mode also requests a dark title bar from Windows, which most modern Windows 10 and 11 installations honour automatically. On platforms where the title bar can't be themed (older Windows builds, some Linux window managers), the title bar will remain in the system default appearance even when dark mode is active inside the application.</p>
 <p>Switching modes is instant — there is no need to restart. Open dialogs, including Find &amp; Replace, repaint to match the new mode.</p>
 <h2 id="focus-mode">Focus mode</h2>

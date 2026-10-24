@@ -230,6 +230,12 @@ The file picker also accepts RTF/CRE dictionaries (.rtf), the interchange format
 
 Each opened dictionary becomes a new tab. There is no fixed limit on how many can be open at once. Tabs persist across sessions: whichever dictionaries are open when the application closes will reopen on the next launch.
 
+## Comparing a word across dictionaries
+
+Select a cell, then switch tabs: the new tab finds the same word and scrolls to it, so you can see how each dictionary writes it. A selected steno cell is matched by steno. A translation cell, a whole row or any other cell is matched by translation. Capitals are ignored, and an exact match is preferred; otherwise the first entry beginning with the text is chosen.
+
+Only the rows the new tab is currently showing are searched. Its search and filters are never changed to find a match, and if nothing matches, the tab is left exactly as it was.
+
 ## Saving
 
 File → Save Dictionary, or Ctrl+S. The active tab's dictionary is written back to its original file. Before each save StenoLab writes a timestamped backup of the previous file contents to its backup folder, so a previous version can always be recovered; see Section 12 for details on backups and restoration.
@@ -401,9 +407,9 @@ The Scope dropdown determines which dictionaries are searched. "Current Dictiona
 
 StenoLab filters as you type, with no Search button to press. Each keystroke updates the visible rows immediately.
 
-More unusually: keystrokes received while the application has focus but no input field is selected are routed automatically to the Text search field, expanding the search panel first if it is currently collapsed. So the workflow "open the program, type the word you're looking for, see results" works without any prior clicks. The character is treated as Begins-With text, the most common search reflex.
+More unusually: keystrokes received while the application has focus but no input field is selected are routed automatically to the Text search. If the Search & Filters panel is open, the Text field takes the keystroke; if it is closed, it stays closed and the text you type appears as a search chip in the panel's header. Backspace removes the last character in that case. So the workflow "open the program, type the word you're looking for, see results" works without any prior clicks. The character is treated as Begins-With text, the most common search reflex.
 
-Type-ahead routing skips when an input field is already focused (so typing in the Find & Replace dialog or an Edit dialog works normally), when modifier keys are held (Ctrl, Alt), and on navigation keys (arrows, Page Up, Home), function keys (F1–F12), and editing keys (Backspace, Delete, Enter, Escape).
+Type-ahead routing skips when an input field is already focused (so typing in the Find & Replace dialog or an Edit dialog works normally), when modifier keys are held (Ctrl, Alt), and on navigation keys (arrows, Page Up, Home), function keys (F1–F12), and editing keys (Delete, Enter, Escape, and Backspace while the panel is open).
 
 Steno-axis searches are not reachable through type-ahead. To search by stroke, click into the Steno field first; the program assumes that someone already thinking in steno will know to do this.
 
@@ -563,7 +569,7 @@ Bookmarks are not persisted between sessions. They are a working-memory aid, not
 
 ## Dark and light mode
 
-View → Dark Mode is a checkbox toggle. The application defaults to dark mode on first launch. The choice persists across sessions.
+View → Light and View → Dark switch the theme; the current one is ticked. The application defaults to dark mode on first launch. The choice persists across sessions.
 
 Dark mode also requests a dark title bar from Windows, which most modern Windows 10 and 11 installations honour automatically. On platforms where the title bar can't be themed (older Windows builds, some Linux window managers), the title bar will remain in the system default appearance even when dark mode is active inside the application.
 

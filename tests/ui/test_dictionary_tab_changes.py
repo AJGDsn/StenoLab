@@ -370,3 +370,54 @@ def test_incremental_sort_order_matches_a_full_sort(root, tmp_path, column, reve
         assert sorted(map(id, ordered)) == sorted(map(id, tab.entries))
         keys = [key(e) for e in ordered]
         assert keys == sorted(keys, reverse=reverse)
+
+
+# --- Following a selection across tabs ---------------------------------------
+
+def select_cell(tab, entry, column):
+    tab.sheet.deselect("all")
+    tab.sheet.select_cell(tab.filtered_entries.index(entry), tab.column_order.index(column))
+
+
+def selected(tab):
+    sel = tab.sheet.get_currently_selected()
+    return (tab.filtered_entries[sel.row]["steno"], sel.type_,
+            tab.column_order[sel.column]) if sel else None
+
+
+def test_follow_matches_translation_or_steno_by_selected_cell(root, tmp_path):
+    source = make_tab(root, tmp_path, [("KAT", "cat"), ("TKOG", "Dog")])
+    other_dir = tmp_path / "other"
+    other_dir.mkdir()
+    target = make_tab(root, other_dir, [("KA*T", "CAT"), ("TKOEG", "dogs"), ("TKOG", "hound")])
+
+    select_cell(source, source.entries[0], "english")
+    assert target.follow(source.follow_target())
+    assert selected(target) == ("KA*T", "cells", "english"), "exact match ignoring case"
+
+    select_cell(source, source.entries[1], "english")
+    target.follow(source.follow_target())
+    assert selected(target) == ("TKOEG", "cells", "english"), "falls back to begins-with"
+
+    select_cell(source, source.entries[1], "steno")
+    target.follow(source.follow_target())
+    assert selected(target) == ("TKOG", "cells", "steno"), "a steno cell matches by steno"
+
+    source._select_rows([source.filtered_entries.index(source.entries[0])])
+    target.follow(source.follow_target())
+    assert selected(target)[:2] == ("KA*T", "rows"), "a whole row matches by translation"
+
+
+def test_follow_searches_only_visible_rows_and_leaves_state_when_unmatched(root, tmp_path):
+    source = make_tab(root, tmp_path, [("KAT", "cat")])
+    other_dir = tmp_path / "other"
+    other_dir.mkdir()
+    target = make_tab(root, other_dir, [("KAT", "cat"), ("TKOG", "dog")])
+    target.apply_search(dict(target.searchbar.get_config(), text_query="dog"))
+    target.sheet.select_cell(0, 0)
+
+    select_cell(source, source.entries[0], "english")
+    assert not target.follow(source.follow_target())
+    assert target.search_config["text_query"] == "dog", "search left as found"
+    assert [e["steno"] for e in target.filtered_entries] == ["TKOG"]
+    assert selected(target) == ("TKOG", "cells", "steno"), "selection left as found"

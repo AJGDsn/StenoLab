@@ -45,7 +45,7 @@ class StenoApp(tk.Tk):
         # Theme - read persisted choice (default: dark)
         settings = load_settings()
         self._theme_mode = settings.get("theme", "dark")
-        self.dark_mode_var = tk.BooleanVar(value=(self._theme_mode == "dark"))
+        self.theme_var = tk.StringVar(value=self._theme_mode)
 
         apply_steno_theme(self, mode=self._theme_mode)
 
@@ -217,11 +217,14 @@ class StenoApp(tk.Tk):
 
         # ── View ──────────────────────────────────────────────────
         view_menu = tk.Menu(menubar, tearoff=0)
-        view_menu.add_checkbutton(
-            label="Dark Mode",
-            variable=self.dark_mode_var,
-            command=self._toggle_theme,
-        )
+        # A radio pair, so exactly one of Light / Dark is always ticked.
+        for label, mode in (("Light", "light"), ("Dark", "dark")):
+            view_menu.add_radiobutton(
+                label=label,
+                variable=self.theme_var,
+                value=mode,
+                command=self._toggle_theme,
+            )
         menubar.add_cascade(label="View", menu=view_menu)
 
         # ── Help ──────────────────────────────────────────────────
@@ -412,8 +415,18 @@ class StenoApp(tk.Tk):
     # ------------------------------------------------------------
     def _on_tab_changed(self, event=None):
         tab = self._get_active_tab()
+        previous, self._last_active_tab = getattr(self, "_last_active_tab", None), tab
         if tab:
             tab.event_generate("<<DictionaryTabActivated>>")
+            # Carry the word selected in the tab just left across, so one
+            # word can be compared quickly between dictionaries.
+            if previous is not None and previous is not tab and not self._restoring_tabs:
+                try:
+                    target = previous.follow_target() if previous.winfo_exists() else None
+                except tk.TclError:
+                    target = None
+                if target:
+                    tab.follow(target)
             self.statusbar.update_status(
                 entries=len(tab.entries),
                 active=tab.name,
@@ -1212,6 +1225,15 @@ class StenoApp(tk.Tk):
                 return None
 
         keysym = event.keysym
+        active_tab = self._get_active_tab()
+        if active_tab is None or not hasattr(active_tab, "type_ahead"):
+            return None
+
+        # With the search panel closed there is no field to backspace in,
+        # so Backspace edits the routed query too.
+        if keysym == "BackSpace" and not (event.state & 0x0004):
+            return "break" if active_tab.type_ahead(backspace=True) else None
+
         if keysym in self._NON_TYPING_KEYSYMS:
             return None
         if keysym.startswith("F") and keysym[1:].isdigit():   # F1–F12
@@ -1230,25 +1252,21 @@ class StenoApp(tk.Tk):
         if not char or not char.isprintable():
             return None
 
-        # Route: focus the active tab's search Text entry (expanding the
-        # panel if collapsed) and let the search bar insert the char at the
-        # right moment in the animation.  We must NOT also call .insert()
-        # ourselves - that would double-insert when the panel is already
-        # open, and could land before focus settles when expanding.
-        active_tab = self._get_active_tab()
-        if active_tab is None or not hasattr(active_tab, "focus_search_text"):
-            return None
-        active_tab.focus_search_text(append_char=char)
-        return "break"
+        # Route to the active tab's text search.  The tab inserts the char
+        # itself (into the open field, or straight into the query when the
+        # panel is closed), so we must NOT also insert it here.
+        return "break" if active_tab.type_ahead(char) else None
 
     # ------------------------------------------------------------
     # Theme toggle
     # ------------------------------------------------------------
     def _toggle_theme(self):
         """Switch between dark and light mode and persist the choice."""
+        if self.theme_var.get() == self._theme_mode:
+            return  # the already-ticked mode was clicked again
         window_state, window_geometry = self._snapshot_window_geometry()
 
-        self._theme_mode = "dark" if self.dark_mode_var.get() else "light"
+        self._theme_mode = self.theme_var.get()
         apply_theme(self, self._theme_mode)
         self.after_idle(lambda: self._restore_after_theme_switch(
             window_state, window_geometry,
