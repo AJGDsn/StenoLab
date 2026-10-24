@@ -709,70 +709,53 @@ class DictionaryTab(ttk.Frame):
             filters_box.columnconfigure(col, weight=1, uniform="filter_col")
 
         check_style = "UnifiedBar.TCheckbutton"
-        cell_pad = {"padx": (0, 14), "pady": 4, "sticky": "w"}
 
-        ttk.Checkbutton(
-            filters_box, text="Has comments", variable=self.filter_has_comments,
-            style=check_style, command=self._apply_filters,
-        ).grid(row=0, column=0, **cell_pad)
-        ttk.Checkbutton(
-            filters_box, text="Is brief", variable=self.filter_is_brief,
-            style=check_style, command=self._apply_filters,
-        ).grid(row=0, column=1, **cell_pad)
-        ttk.Checkbutton(
-            filters_box, text="Bookmarked", variable=self.filter_bookmarked,
-            style=check_style, command=self._apply_filters,
-        ).grid(row=0, column=2, **cell_pad)
-        ttk.Checkbutton(
-            filters_box, text="Conflicts", variable=self.filter_conflicts,
-            style=check_style, command=self._apply_filters,
-        ).grid(row=0, column=3, **cell_pad)
+        def group(column, title):
+            """A labelled column of checkboxes; returns its frame."""
+            frame = ttk.Frame(filters_box, style="UnifiedBarInner.TFrame")
+            frame.grid(row=0, column=column, sticky="nw", padx=(0, 14))
+            ttk.Label(frame, text=title.upper(), style="FilterGroup.TLabel").pack(
+                anchor="w", pady=(0, 2))
+            return frame
 
-        ttk.Checkbutton(
-            filters_box, text="Capitalised", variable=self.filter_capitalised,
-            style=check_style, command=self._apply_filters,
-        ).grid(row=1, column=0, **cell_pad)
-        ttk.Checkbutton(
-            filters_box, text="Numbers (0–9)", variable=self.filter_has_digits,
-            style=check_style, command=self._apply_filters,
-        ).grid(row=1, column=1, **cell_pad)
-        ttk.Checkbutton(
-            filters_box, text="Numbers (written)",
-            variable=self.filter_has_written_numbers,
-            style=check_style, command=self._apply_filters,
-        ).grid(row=1, column=2, **cell_pad)
-        ttk.Checkbutton(
-            filters_box, text="Punctuation", variable=self.filter_has_punctuation,
-            style=check_style, command=self._apply_filters,
-        ).grid(row=1, column=3, **cell_pad)
+        def check(parent, text, variable, command=self._apply_filters):
+            ttk.Checkbutton(
+                parent, text=text, variable=variable,
+                style=check_style, command=command,
+            ).pack(anchor="w", pady=3)
 
-        ttk.Checkbutton(
-            filters_box, text="Has frequency", variable=self.filter_has_frequency,
-            style=check_style, command=self._apply_filters,
-        ).grid(row=2, column=0, **cell_pad)
+        entries = group(0, "Entries")
+        check(entries, "Has comments", self.filter_has_comments)
+        check(entries, "Is brief", self.filter_is_brief)
+        check(entries, "Bookmarked", self.filter_bookmarked)
+        check(entries, "Conflicts", self.filter_conflicts)
 
-        top_group = ttk.Frame(filters_box, style="UnifiedBarInner.TFrame")
-        top_group.grid(row=2, column=1, sticky="w", pady=4)
+        text = group(1, "Translation")
+        check(text, "Capitalised", self.filter_capitalised)
+        check(text, "Numbers (0–9)", self.filter_has_digits)
+        check(text, "Numbers (written)", self.filter_has_written_numbers)
+        check(text, "Punctuation", self.filter_has_punctuation)
+
+        frequency = group(2, "Frequency")
+        check(frequency, "Has frequency", self.filter_has_frequency)
+        top_group = ttk.Frame(frequency, style="UnifiedBarInner.TFrame")
+        top_group.pack(anchor="w", pady=3)
         ttk.Checkbutton(
             top_group, text="Top", variable=self.filter_top_freq,
             style=check_style, command=self._apply_filters,
         ).pack(side=tk.LEFT)
         ttk.Entry(
-            top_group, textvariable=self.filter_top_freq_n_var, width=4,
+            top_group, textvariable=self.filter_top_freq_n_var, width=5,
         ).pack(side=tk.LEFT, padx=(6, 6))
         ttk.Label(
-            top_group, text="entries by frequency", style="UnifiedBar.TLabel",
+            top_group, text="by frequency", style="UnifiedBar.TLabel",
         ).pack(side=tk.LEFT)
 
-        ttk.Checkbutton(
-            filters_box, text="Focus mode", variable=self.focus_mode,
-            style=check_style, command=self._toggle_focus_mode,
-        ).grid(row=2, column=2, padx=(0, 14), pady=4, sticky="w")
-        ttk.Checkbutton(
-            filters_box, text="Show frequency column",
-            variable=self.show_freq_column,
-            style=check_style, command=self._toggle_freq_column,
-        ).grid(row=2, column=3, padx=(0, 0), pady=4, sticky="w")
+        # Not filters: these change what the table shows, not which rows.
+        view = group(3, "View")
+        check(view, "Focus mode", self.focus_mode, self._toggle_focus_mode)
+        check(view, "Show frequency column", self.show_freq_column,
+              self._toggle_freq_column)
 
         # Establish initial expanded / collapsed visual.
         if self.unified_expanded:

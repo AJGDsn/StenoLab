@@ -4,7 +4,10 @@ Bottom status bar.
 
 Layout (left → right):
 
-    [📖 N entries] [🗂 N open] [● Active: name] [💾 Saved hh:mm]   …   [chip] [Save All]
+    [N entries] · [N open] · [Active: name]   …   [N unsaved] [Save All]
+
+The right-hand chip and Save All only appear while something is unsaved;
+each tab's own Saved / Unsaved chip shows its state the rest of the time.
 
 Each segment is its own ``ttk.Label`` so we can give them subtle dividers
 and let long values truncate naturally without stretching the row.  All
@@ -26,7 +29,6 @@ class StatusBar(ttk.Frame):
         self.entry_count = 0
         self.dict_count = 0
         self.active_dict = ""
-        self.last_saved = "-"
         self.unsaved_count = 0
         self._on_save_all = on_save_all
 
@@ -45,7 +47,6 @@ class StatusBar(ttk.Frame):
         self.entries_label = self._segment(row)
         self.dicts_label = self._segment(row, with_divider=True)
         self.active_label = self._segment(row, with_divider=True)
-        self.saved_label = self._segment(row, with_divider=True)
 
         # Right side actions
         self.save_all_btn = ttk.Button(
@@ -55,8 +56,8 @@ class StatusBar(ttk.Frame):
             command=self._save_all,
         )
 
+        # Packed by _render only while something is unsaved.
         self.unsaved_chip = ttk.Label(row, style="StatusBar.TLabel")
-        self.unsaved_chip.pack(side="right")
 
         self._render()
 
@@ -73,15 +74,13 @@ class StatusBar(ttk.Frame):
 
     # ------------------------------------------------------------------
     def update_status(self, *, entries=None, dictionaries=None, active=None,
-                      saved=None, unsaved=None):
+                      unsaved=None):
         if entries is not None:
             self.entry_count = entries
         if dictionaries is not None:
             self.dict_count = dictionaries
         if active is not None:
             self.active_dict = active
-        if saved is not None:
-            self.last_saved = saved
         if unsaved is not None:
             self.unsaved_count = unsaved
 
@@ -96,8 +95,6 @@ class StatusBar(ttk.Frame):
         self.dicts_label.configure(text=f"{dicts} open")
         active = self.active_dict.strip() if self.active_dict else ""
         self.active_label.configure(text=f"Active: {active or '—'}")
-        saved = (self.last_saved or "—").strip() or "—"
-        self.saved_label.configure(text=f"Saved: {saved}")
 
         # main.py refreshes the status bar every 400 ms, so only re-pack when
         # the saved / unsaved state actually changes.
@@ -109,16 +106,11 @@ class StatusBar(ttk.Frame):
             if has_unsaved:
                 self.save_all_btn.pack(side="right")
                 self.unsaved_chip.pack(side="right", padx=(0, 8))
-            else:
-                self.unsaved_chip.pack(side="right", padx=(0, 0))
-            self.save_all_btn.configure(state="normal" if has_unsaved else "disabled")
         if has_unsaved:
             self.unsaved_chip.configure(
                 text=f"{self.unsaved_count} unsaved",
                 style="HeaderWarning.TLabel",
             )
-        else:
-            self.unsaved_chip.configure(text="Saved", style="StatusBar.TLabel")
 
     def _save_all(self):
         if callable(self._on_save_all):

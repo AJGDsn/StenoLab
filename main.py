@@ -1,7 +1,6 @@
 # main.py
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
-from datetime import datetime
 
 # UI components
 from ui.theme import apply_steno_theme, apply_theme, set_titlebar_dark, get_mode
@@ -714,8 +713,7 @@ class StenoApp(tk.Tk):
         tab = self._get_active_tab()
         if not tab:
             return
-        if tab.save_json():
-            self.statusbar.update_status(saved=datetime.now().strftime("%H:%M"))
+        tab.save_json()
         self._refresh_unsaved_status()
 
     # ------------------------------------------------------------
@@ -893,8 +891,6 @@ class StenoApp(tk.Tk):
                 "\n".join(f"- {getattr(tab, 'name', 'dictionary')}: {err}" for tab, err in failed),
             )
 
-        if len(failed) < len(dirty_tabs):
-            self.statusbar.update_status(saved=datetime.now().strftime("%H:%M"))
         self._refresh_unsaved_status()
 
     def _find_next_global(self):
@@ -1310,8 +1306,6 @@ class StenoApp(tk.Tk):
         except Exception:
             pass
 
-        if not deferred:
-            self.statusbar.update_status(saved=datetime.now().strftime("%H:%M"))
         messagebox.showinfo(
             "Import Frequency List",
             f"Imported frequencies from {source}.\n"

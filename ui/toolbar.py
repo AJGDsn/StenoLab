@@ -9,29 +9,34 @@ compact even on small windows.
 
 Layout:
 
-    [📂] [💾]   |   [+] [✎] [⌕] [★]   …spacer…   [↶] [↷]
-     open save     add edit find bm                 undo redo
+    [open] [save]   |   [add] [edit] [find] [bookmark]   …spacer…   [undo] [redo]
+
+Icons come from the Windows icon font (see theme.icon_font_family), so
+they share one style and follow the theme colours; plain Unicode glyphs
+stand in if that font is missing.
 """
 import tkinter as tk
 from tkinter import ttk
 
+from ui.theme import icon_font_family
 from ui.tooltip import Tooltip
 
 
-# (icon, callback_key, tooltip, [optional attr_name to expose on toolbar])
+# (icon-font glyph, fallback glyph, callback_key, tooltip,
+#  [optional attr_name to expose on toolbar])
 _FILE_GROUP = [
-    ("📂", "open", "Open Dictionary  (Ctrl+O)", None),
-    ("💾", "save", "Save Dictionary  (Ctrl+S)", "_save_btn"),
+    ("", "📂", "open", "Open Dictionary  (Ctrl+O)", None),        # FolderOpen
+    ("", "💾", "save", "Save Dictionary  (Ctrl+S)", "_save_btn"),  # Save
 ]
 _ACTION_GROUP = [
-    ("＋", "add",       "Add Entry  (Ctrl+N)",        None),
-    ("✎",  "edit",      "Edit Entry  (Ctrl+E)",       None),
-    ("⌕",  "find",      "Find & Replace  (Ctrl+F)",   None),
-    ("★",  "bookmarks", "Toggle Bookmark  (Ctrl+B)",  None),
+    ("", "＋", "add",       "Add Entry  (Ctrl+N)",       None),     # Add
+    ("", "✎",  "edit",      "Edit Entry  (Ctrl+E)",      None),     # Edit
+    ("", "⌕",  "find",      "Find & Replace  (Ctrl+F)",  None),     # Search
+    ("", "★",  "bookmarks", "Toggle Bookmark  (Ctrl+B)", None),     # FavoriteStar
 ]
 _HISTORY_GROUP = [
-    ("↶", "undo", "Undo  (Ctrl+Z)", "_undo_btn"),
-    ("↷", "redo", "Redo  (Ctrl+Y)", "_redo_btn"),
+    ("", "↶", "undo", "Undo  (Ctrl+Z)", "_undo_btn"),               # Undo
+    ("", "↷", "redo", "Redo  (Ctrl+Y)", "_redo_btn"),               # Redo
 ]
 
 
@@ -52,10 +57,11 @@ class Toolbar(ttk.Frame):
     def _add_group(self, definitions, *, side, first=False):
         group = ttk.Frame(self, style="ToolbarGroup.TFrame")
         group.pack(side=side, padx=(0 if first else 0, 0))
-        for i, (icon, key, tip, attr) in enumerate(definitions):
+        use_icon_font = icon_font_family() != "Segoe UI Symbol"
+        for i, (glyph, fallback, key, tip, attr) in enumerate(definitions):
             btn = ttk.Button(
                 group,
-                text=icon,
+                text=glyph if use_icon_font else fallback,
                 style="ToolbarIcon.TButton",
                 command=lambda k=key: self._trigger(k),
                 takefocus=False,

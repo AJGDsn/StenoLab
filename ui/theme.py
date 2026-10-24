@@ -97,6 +97,24 @@ C = dict(DARK)
 _current_mode = "dark"
 
 
+_icon_font = None
+
+
+def icon_font_family() -> str:
+    """The Windows icon font for toolbar glyphs: Segoe Fluent Icons
+    (Windows 11), Segoe MDL2 Assets (Windows 10), or Segoe UI Symbol with
+    plain Unicode glyphs as a last resort.  Needs a Tk root to exist."""
+    global _icon_font
+    if _icon_font is None:
+        from tkinter import font as tkfont
+        installed = set(tkfont.families())
+        _icon_font = next(
+            (f for f in ("Segoe Fluent Icons", "Segoe MDL2 Assets") if f in installed),
+            "Segoe UI Symbol",
+        )
+    return _icon_font
+
+
 def get_mode() -> str:
     return _current_mode
 
@@ -310,6 +328,11 @@ def _configure_styles(style: ttk.Style):
     style.configure("UnifiedBar.TLabel",
                     background=C["bg_panel"],
                     foreground=C["fg"])
+    # Small heading above each group of filter checkboxes.
+    style.configure("FilterGroup.TLabel",
+                    background=C["bg_panel"],
+                    foreground=C["fg_dim"],
+                    font=("Segoe UI", 9, "bold"))
     style.configure("UnifiedBar.TCheckbutton",
                     background=C["bg_panel"],
                     foreground=C["fg"],
@@ -379,7 +402,7 @@ def _configure_styles(style: ttk.Style):
     style.configure("ToolbarIcon.TButton",
                     background=C["bg"],
                     foreground=C["fg"],
-                    font=("Segoe UI Symbol", 14),
+                    font=(icon_font_family(), 13 if icon_font_family() != "Segoe UI Symbol" else 14),
                     padding=(8, 5),
                     width=2,
                     borderwidth=0,
