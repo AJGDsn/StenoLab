@@ -812,6 +812,19 @@ class DictionaryTab(ttk.Frame):
             header_selected_columns_bg=C["bg_panel"], header_selected_columns_fg=C["fg_dim"],
             frame_bg=C["bg_panel"], outline_color=C["border"],
             alternate_color=C["bg_alt"],
+            # Scrollbars (tksheet's own ttk widgets) — track the palette so
+            # they are not stuck on the seed theme's dark colours in light mode.
+            vertical_scroll_background=C["bg_panel"], horizontal_scroll_background=C["bg_panel"],
+            vertical_scroll_troughcolor=C["bg_panel"], horizontal_scroll_troughcolor=C["bg_panel"],
+            vertical_scroll_bordercolor=C["bg_panel"], horizontal_scroll_bordercolor=C["bg_panel"],
+            vertical_scroll_lightcolor=C["bg_panel"], horizontal_scroll_lightcolor=C["bg_panel"],
+            vertical_scroll_darkcolor=C["bg_panel"], horizontal_scroll_darkcolor=C["bg_panel"],
+            vertical_scroll_not_active_bg=C["border"], horizontal_scroll_not_active_bg=C["border"],
+            vertical_scroll_not_active_fg=C["border"], horizontal_scroll_not_active_fg=C["border"],
+            vertical_scroll_active_bg=C["fg_dim"], horizontal_scroll_active_bg=C["fg_dim"],
+            vertical_scroll_active_fg=C["fg_dim"], horizontal_scroll_active_fg=C["fg_dim"],
+            vertical_scroll_pressed_bg=C["fg_dim"], horizontal_scroll_pressed_bg=C["fg_dim"],
+            vertical_scroll_pressed_fg=C["fg_dim"], horizontal_scroll_pressed_fg=C["fg_dim"],
             redraw=False,
         )
 
