@@ -182,7 +182,7 @@ Seven icon buttons are arranged across the toolbar. The five action buttons on t
 | ✎   | Edit Entry | Opens the Edit dialog for the selected row. |
 | ⌕   | Find & Replace | Opens the Find & Replace dialog. |
 | ★   | Toggle Bookmark | Bookmarks or un-bookmarks all selected rows. |
-| ↺   | Undo | Undo the last add, edit, or delete. Sits on the right side of the toolbar; disabled when there is nothing to undo. |
+| ↺   | Undo | Undo the last change: an add, edit, delete, copy or move into the tab, Replace, or Replace All. Sits on the right side of the toolbar; disabled when there is nothing to undo. |
 | ↻   | Redo | Replay the most recently undone operation. Disabled when there is nothing to redo. |
 
 ## Search panel
@@ -242,11 +242,11 @@ File → Close Dictionary closes the active tab. If the tab has unsaved changes 
 
 Closing the application — File → Exit, or the window close button — follows the same logic but considers all open tabs at once. If several have unsaved changes a single dialog lists them with checkboxes, defaulting to all ticked, so you can save the ones you want and discard the rest in one step. Tabs with no unsaved changes never appear in the dialog; their files are already in sync with disk.
 
-Metadata edits (Brief flag, Comments, etc.) save themselves immediately and are never at risk on close, so they don't enter either dialog.
+Metadata edits (Brief flag, Comments, etc.) are saved together with the dictionary, so saving keeps both and discarding drops both. This keeps a dictionary and its metadata in step: renaming a steno and then discarding can't lose that entry's comments.
 
 ## The unsaved-changes indicator
 
-When a tab has changes that have not yet been written to its dictionary file, a dot (●) appears before the tab name. This signals only that the dictionary file is out of sync with the in-memory entries — metadata changes do not produce the dot because they save immediately on edit.
+When a tab has changes that have not yet been written to its dictionary file, a dot (●) appears before the tab name. It covers every change to the tab: entries added, edited, deleted, copied or moved in, Find & Replace, and the metadata that goes with them. Undoing back to the last saved state clears the dot again.
 
 # 4\. The Dictionary Table
 
@@ -330,7 +330,7 @@ The Steno field auto-capitalises as you type. Steno is conventionally written in
 
 Select one or more rows, then either press Delete, choose Edit → Delete Selected, or right-click → Delete. A confirmation prompt appears; for a single row it shows the steno key, for multiple rows it shows the count.
 
-Deleted entries are removed from the in-memory dictionary immediately. Their metadata is also discarded. The dictionary file on disk is unchanged until the next save (or until the application closes).
+Deleted entries are removed from the in-memory dictionary immediately. Their metadata is discarded too, unless another row still uses the same steno. The dictionary file and its metadata on disk are unchanged until the next save.
 
 ## Cross-tab transfer
 
@@ -497,7 +497,7 @@ Where the Search panel filters the visible rows down, Find & Replace navigates a
 *   Match case: when ticked, capitalisation must match exactly.
 *   Prev / Next: navigate between matches.
 *   Replace: replace in the currently selected match, then advance.
-*   Replace All: replace every match across the entire dictionary in one operation. Because Replace All cannot be undone, a confirmation dialog shows the match count before proceeding and recommends saving first.
+*   Replace All: replace every match across the entire dictionary in one operation. A confirmation shows how many entries will change. Replace All is a single undoable change, so Ctrl+Z reverses all of it.
 *   Close: dismiss the dialog and clear find highlighting.
 
 ## Highlighting
@@ -511,7 +511,7 @@ There is one important asymmetry to be aware of:
 *   Find — and the Prev / Next / Replace buttons — operates only on the currently visible (filtered) rows. If a search or filter is hiding rows in the tab, Find won't see them.
 *   Replace All operates on every entry in the dictionary, regardless of search or filter state.
 
-This is intentional: Find should match what’s on screen, and Replace All should be a sweeping operation that won’t leave instances behind in hidden rows. Be deliberate when using Replace All — it really does mean every entry, and it cannot be undone. The automatic pre-save backup (Section 13) provides a recovery path if you need to roll back.
+This is intentional: Find should match what’s on screen, and Replace All should be a sweeping operation that won’t leave instances behind in hidden rows. Be deliberate when using Replace All — it really does mean every entry. If the result isn't what you wanted, Ctrl+Z undoes the whole replacement in one step.
 
 ## Case sensitivity
 

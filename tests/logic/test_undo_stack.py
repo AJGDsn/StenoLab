@@ -19,6 +19,21 @@ def test_undo_redo_tracks_dirty_delta():
     assert stack.is_dirty
 
 
+def test_edit_after_undoing_past_the_save_stays_dirty():
+    stack = UndoStack()
+    stack.push({"op": "a"})
+    stack.mark_saved()
+    stack.pop_undo()           # now before the saved state
+    stack.push({"op": "b"})    # the saved state is no longer reachable
+    assert stack.is_dirty
+
+    stack.pop_undo()
+    assert stack.is_dirty
+
+    stack.mark_saved()
+    assert not stack.is_dirty
+
+
 def test_mark_saved_and_clear_reset_state():
     stack = UndoStack()
     stack.push({"op": "add"})

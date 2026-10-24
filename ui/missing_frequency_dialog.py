@@ -6,14 +6,13 @@ The dialog is intentionally temporary: it does not create a dictionary file.
 Completed rows are copied into the active dictionary using the same in-memory
 entry and metadata shape as the main editor.
 """
-import copy
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import date
 
-from logic.metadata_store import save_metadata
 from logic.settings_store import load_settings, save_settings
 from logic.steno_validator import validate_steno
+from logic.metadata_store import default_metadata, merge_metadata
 from ui.theme import C
 
 
@@ -295,66 +294,46 @@ class MissingFrequencyDialog(tk.Toplevel):
             messagebox.showinfo("Missing Frequency Words", "No completed rows to add.", parent=self)
             return
 
-        existing_words = _existing_plain_words(self.tab)
-        today = date.today().strftime("%Y-%m-%d")
-        added = 0
-
+        # Validate every row before adding any, so a bad steno part-way
+        # through doesn't leave the batch half added.
         for row in rows:
-            steno = row["steno"].strip().upper()
-            ok, msg = validate_steno(steno)
+            ok, msg = validate_steno(row["steno"].strip().upper())
             if not ok:
                 self.tree.selection_set(row["word"])
                 self._load_selected()
                 self._status_var.set(msg)
                 self._steno_entry.focus_set()
                 return
+
+        existing_words = _existing_plain_words(self.tab)
+        today = date.today().strftime("%Y-%m-%d")
+        added = 0
+        change = self.tab._begin_change("Add Missing Frequency Words")
+
+        for row in rows:
             if row["word"].lower() in existing_words:
                 row["status"] = "Added"
                 continue
-
-            entry = {
+            steno = row["steno"].strip().upper()
+            change.add({
                 "steno": steno,
                 "english": row["word"],
                 "modified": today,
                 "date_added": today,
-            }
-            meta = {
-                "date_added": today,
-                "modified": today,
-                "brief": False,
-                "comments": "",
-                "bookmarked": False,
-                "frequency": row["frequency"],
-            }
-            self.tab.entries.append(entry)
-            if self.tab.metadata is not None:
-                self.tab.metadata[steno] = copy.deepcopy(meta)
-            self.tab._push_undo_frame({
-                "op": "add",
-                "label": "Add Missing Frequency Word",
-                "entry_ref": entry,
-                "steno": steno,
-                "meta": copy.deepcopy(meta),
             })
+            existing = self.tab.metadata.get(steno)
+            if existing is None:
+                meta = default_metadata(today, today)
+            else:
+                meta = merge_metadata(existing, modified=today)
+            if not meta.get("frequency"):
+                meta["frequency"] = row["frequency"]
+            change.set_meta(steno, meta)
             existing_words.add(row["word"].lower())
             row["status"] = "Added"
             added += 1
 
-        if added:
-            self.tab._metadata_dirty = True
-            if self.tab.dict_path and self.tab.metadata is not None:
-                try:
-                    save_metadata(self.tab.dict_path, self.tab.metadata)
-                except Exception as e:
-                    messagebox.showerror(
-                        "Metadata Save Error",
-                        f"Added entries, but failed to save their metadata:\n{e}",
-                        parent=self,
-                    )
-            self.tab._rebuild_conflict_stenos()
-            self.tab._apply_filters()
-            if self.tab.on_entries_changed:
-                self.tab.on_entries_changed(len(self.tab.entries))
+        change.commit()
         self._refresh_rows()
         messagebox.showinfo(
             "Missing Frequency Words",

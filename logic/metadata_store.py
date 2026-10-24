@@ -4,6 +4,7 @@ import json
 import hashlib
 from datetime import date
 
+from .file_io import atomic_write_text
 from .storage_paths import (
     APP_ROOT,
     LEGACY_APP_ROOT,
@@ -89,8 +90,7 @@ def load_metadata(dictionary_path: str) -> dict:
     if path != candidates[0]:
         try:
             _ensure_dirs()
-            with open(candidates[0], "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+            atomic_write_text(candidates[0], json.dumps(data, indent=2, ensure_ascii=False))
         except Exception:
             pass
     return data
@@ -104,13 +104,45 @@ def save_metadata(dictionary_path: str, metadata_dict: dict) -> None:
     """Write all metadata for a dictionary to a single JSON file."""
     _ensure_dirs()
     path = _metadata_file_for(dictionary_path)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(metadata_dict, f, indent=2, ensure_ascii=False)
+    atomic_write_text(path, json.dumps(metadata_dict, indent=2, ensure_ascii=False))
 
 
 # ------------------------------------------------------------
 # Ensuring metadata exists (in-memory only - caller saves if dirty)
 # ------------------------------------------------------------
+
+def default_metadata(date_added: str, modified: str) -> dict:
+    """A fresh metadata record for one steno."""
+    return {
+        "date_added": date_added,
+        "modified": modified,
+        "brief": False,
+        "comments": "",
+        "bookmarked": False,
+        "frequency": 0,
+    }
+
+
+def merge_metadata(existing: dict, *, modified: str,
+                   brief: bool | None = None, comments: str | None = None) -> dict:
+    """
+    Metadata for a steno that an entry is joining when the steno already
+    has metadata (another row shares it).  The existing record wins; the
+    incoming brief flag and comments are added to it rather than replacing
+    it, so nothing the other row relies on is lost.
+    """
+    merged = dict(existing)
+    merged["modified"] = modified
+    if brief:
+        merged["brief"] = True
+    if comments:
+        current = merged.get("comments", "")
+        if not current:
+            merged["comments"] = comments
+        elif comments not in current:
+            merged["comments"] = f"{current}\n{comments}"
+    return merged
+
 
 def ensure_metadata(entries: list, existing_metadata: dict) -> dict:
     """
@@ -124,13 +156,8 @@ def ensure_metadata(entries: list, existing_metadata: dict) -> dict:
     for entry in entries:
         steno = entry["steno"]
         if steno not in metadata:
-            metadata[steno] = {
-                "date_added": entry.get("date_added", today),
-                "modified": entry.get("modified", today),
-                "brief": False,
-                "comments": "",
-                "bookmarked": False,
-                "frequency": 0,
-            }
+            metadata[steno] = default_metadata(
+                entry.get("date_added", today), entry.get("modified", today)
+            )
 
     return metadata

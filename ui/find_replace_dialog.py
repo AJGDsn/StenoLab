@@ -4,7 +4,6 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import date
 
-from logic.metadata_store import save_metadata
 from ui.theme import C
 
 
@@ -212,38 +211,17 @@ class FindReplaceDialog(tk.Toplevel):
         if not find_text:
             return
 
-        flags   = 0 if self.case_var.get() else re.IGNORECASE
-        pattern = re.compile(re.escape(find_text), flags)
+        pattern = self._pattern(find_text)
 
         selected = tab.selected_entries()
         if not selected:
             self._find_next()
             return
 
-        entry = selected[0]
-        steno, english = entry["steno"], entry.get("english") or ""
-        modified = False
-
-        if field in ("Translation", "Both"):
-            new_english = pattern.sub(replace_text, english)
-            if new_english != english:
-                self._update_field(tab, steno, english, "english", new_english)
-                modified = True
-
-        if field in ("Steno", "Both"):
-            new_steno = pattern.sub(replace_text, steno)
-            if new_steno != steno:
-                self._rename_steno(tab, steno, new_steno, english)
-                modified = True
-
-        if modified:
-            tab._set_dirty()
-            if not self._save_tab_metadata(tab):
-                return
-            tab._rebuild_conflict_stenos()
-            if hasattr(tab, "_refresh_dictionary_header"):
-                tab._refresh_dictionary_header()
-            tab._apply_filters()
+        change = tab._begin_change("Replace")
+        if self._replace_in_entry(tab, change, selected[0], pattern,
+                                  replace_text, field, date.today().strftime("%Y-%m-%d")):
+            change.commit()
             self._update_matches()
 
         self._find_next()
@@ -262,147 +240,79 @@ class FindReplaceDialog(tk.Toplevel):
         if not find_text:
             return
 
-        flags   = 0 if self.case_var.get() else re.IGNORECASE
-        pattern = re.compile(re.escape(find_text), flags)
+        pattern = self._pattern(find_text)
 
-        # Count matches first so the warning can show a meaningful number
-        preview = 0
-        for entry in tab.entries:
-            if field in ("Translation", "Both") and pattern.search(entry.get("english") or ""):
-                preview += 1
-            if field in ("Steno", "Both") and pattern.search(entry["steno"]):
-                preview += 1
-
-        if preview == 0:
+        # Operate on ALL entries (not just the filtered view)
+        targets = [e for e in tab.entries if self._row_matches(tab, e, pattern, field)]
+        if not targets:
             messagebox.showinfo("Replace All", "No matches found.", parent=self)
             self._update_matches()
             return
 
-        # Replace All is not undoable — warn the user and give them the chance
-        # to save first so they have a clean restore point
+        n = len(targets)
         proceed = messagebox.askyesno(
-            "Replace All — Cannot Be Undone",
-            f"Replace All will modify {preview} occurrence"
-            f"{'s' if preview != 1 else ''} and cannot be undone.\n\n"
-            f"A backup of the current state will be saved automatically "
-            f"before continuing.\n\n"
-            f"Continue?",
+            "Replace All",
+            f"Replace matches in {n:,} entr{'y' if n == 1 else 'ies'}?\n\n"
+            f"You can undo this with Ctrl+Z.",
             parent=self,
         )
         if not proceed:
             return
 
-        if not tab.dict_path:
-            messagebox.showerror(
-                "Replace All",
-                "Save this dictionary before using Replace All so a backup can be created.",
-                parent=self,
-            )
-            return
-
-        # If there are already unsaved edits, save them first so the backup
-        # taken below reflects the actual current state, not stale disk data.
-        if getattr(tab, "_json_dirty", False) and not tab.save_json():
-            return
-
-        try:
-            from logic.backup_store import backup_dictionary
-            ok, msg = backup_dictionary(tab.dict_path, kind="save")
-        except Exception as e:
-            ok, msg = False, str(e)
-
-        if not ok:
-            messagebox.showerror(
-                "Backup Failed",
-                f"Could not back up the current dictionary:\n\n{msg}",
-                parent=self,
-            )
-            return
-
         today = date.today().strftime("%Y-%m-%d")
-        count = 0
-
-        # Operate on ALL entries (not just the filtered view)
-        for entry in list(tab.entries):          # list() because steno rename mutates
-            if field in ("Translation", "Both"):
-                old = entry.get("english") or ""
-                new = pattern.sub(replace_text, old)
-                if new != old:
-                    entry["english"]  = new
-                    entry["modified"] = today
-                    if tab.metadata and entry["steno"] in tab.metadata:
-                        tab.metadata[entry["steno"]]["modified"] = today
-                    count += 1
-
-            if field in ("Steno", "Both"):
-                old = entry["steno"]
-                new = pattern.sub(replace_text, old)
-                if new != old:
-                    self._rename_steno(tab, old, new, entry.get("english") or "")
-                    count += 1
-
-        if count:
-            tab._set_dirty()
-            if not self._save_tab_metadata(tab):
-                return
-            tab._rebuild_conflict_stenos()
-            if hasattr(tab, "_refresh_dictionary_header"):
-                tab._refresh_dictionary_header()
-            tab._apply_filters()
-            messagebox.showinfo(
-                "Replace All",
-                f"Replaced {count} occurrence{'s' if count != 1 else ''}.",
-                parent=self,
-            )
-        else:
-            messagebox.showinfo("Replace All", "No matches found.", parent=self)
-
+        change = tab._begin_change("Replace All")
+        for entry in targets:
+            self._replace_in_entry(tab, change, entry, pattern, replace_text,
+                                   field, today, drop_old_meta=False)
+        # One pass over the dictionary for all renamed stenos, rather than
+        # one per entry.
+        change.drop_unused_meta(old.get("steno") for old in change.old_values())
+        change.commit()
+        messagebox.showinfo(
+            "Replace All",
+            f"Replaced matches in {n:,} entr{'y' if n == 1 else 'ies'}.",
+            parent=self,
+        )
         self._update_matches()
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
-    def _update_field(self, tab, steno, english, field, new_value):
-        today = date.today().strftime("%Y-%m-%d")
-        for entry in tab.entries:
-            if entry["steno"] == steno and (entry.get("english") or "") == english:
-                entry[field]      = new_value
-                entry["modified"] = today
-                if tab.metadata and steno in tab.metadata:
-                    tab.metadata[steno]["modified"] = today
-                break
+    def _pattern(self, find_text):
+        flags = 0 if self.case_var.get() else re.IGNORECASE
+        return re.compile(re.escape(find_text), flags)
 
-    def _rename_steno(self, tab, old_steno, new_steno, english):
-        """Rename a steno key: update the entry, metadata, bookmarks, conflicts."""
-        today = date.today().strftime("%Y-%m-%d")
-        for entry in tab.entries:
-            if entry["steno"] == old_steno and (entry.get("english") or "") == english:
-                entry["steno"]    = new_steno
-                entry["modified"] = today
-                break
-        if tab.metadata and old_steno in tab.metadata:
-            m = tab.metadata.pop(old_steno)
-            m["modified"] = today
-            tab.metadata[new_steno] = m
-        if old_steno in tab.bookmarked_stenos:
-            tab.bookmarked_stenos.discard(old_steno)
-            tab.bookmarked_stenos.add(new_steno)
-        tab.conflict_stenos.discard(old_steno)
-
-    def _save_tab_metadata(self, tab) -> bool:
-        if not getattr(tab, "dict_path", None) or tab.metadata is None:
-            return True
-        try:
-            save_metadata(tab.dict_path, tab.metadata)
-            tab._metadata_dirty = False
-            return True
-        except Exception as e:
-            messagebox.showerror(
-                "Metadata Save Error",
-                f"Failed to save entry metadata:\n{e}",
-                parent=self,
-            )
+    def _replace_in_entry(self, tab, change, entry, pattern, replace_text,
+                          field, today, drop_old_meta=True) -> bool:
+        """Apply the replacement to one entry within `change`.  Returns
+        True if the entry changed."""
+        # A function replacement inserts the text exactly as typed; a plain
+        # string would be read as a regex template (\1, \n, ...).
+        literal = lambda _m: replace_text  # noqa: E731
+        old_steno   = entry["steno"]
+        old_english = entry.get("english") or ""
+        new_english = old_english
+        new_steno   = old_steno
+        if field in ("Translation", "Both"):
+            new_english = pattern.sub(literal, old_english)
+        if field in ("Steno", "Both"):
+            new_steno = pattern.sub(literal, old_steno)
+        if new_english == old_english and new_steno == old_steno:
             return False
+
+        fields = {"modified": today}
+        if new_steno != old_steno:
+            fields["steno"] = new_steno
+        if new_english != old_english:
+            fields["english"] = new_english
+        change.update(entry, **fields)
+        tab._retarget_metadata(change, entry, old_steno, today)
+        if new_steno != old_steno:
+            if old_steno in tab.bookmarked_stenos:
+                tab.bookmarked_stenos.add(new_steno)
+            if drop_old_meta:
+                change.drop_unused_meta([old_steno])
+        return True
 
     def _on_close(self):
         tab = self.get_tab()

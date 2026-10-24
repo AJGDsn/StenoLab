@@ -197,7 +197,7 @@ hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
 <tr>
 <td>↺</td>
 <td>Undo</td>
-<td>Undo the last add, edit, or delete. Sits on the right side of the toolbar; disabled when there is nothing to undo.</td>
+<td>Undo the last change: an add, edit, delete, copy or move into the tab, Replace, or Replace All. Sits on the right side of the toolbar; disabled when there is nothing to undo.</td>
 </tr>
 <tr>
 <td>↻</td>
@@ -264,9 +264,9 @@ hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
 <h2 id="closing-a-dictionary">Closing a dictionary</h2>
 <p>File → Close Dictionary closes the active tab. If the tab has unsaved changes (the dot indicator is showing), StenoLab asks whether to save them, discard them, or cancel and keep the tab open.</p>
 <p>Closing the application — File → Exit, or the window close button — follows the same logic but considers all open tabs at once. If several have unsaved changes a single dialog lists them with checkboxes, defaulting to all ticked, so you can save the ones you want and discard the rest in one step. Tabs with no unsaved changes never appear in the dialog; their files are already in sync with disk.</p>
-<p>Metadata edits (Brief flag, Comments, etc.) save themselves immediately and are never at risk on close, so they don't enter either dialog.</p>
+<p>Metadata edits (Brief flag, Comments, etc.) are saved together with the dictionary, so saving keeps both and discarding drops both. This keeps a dictionary and its metadata in step: renaming a steno and then discarding can't lose that entry's comments.</p>
 <h2 id="the-unsaved-changes-indicator">The unsaved-changes indicator</h2>
-<p>When a tab has changes that have not yet been written to its dictionary file, a dot (●) appears before the tab name. This signals only that the dictionary file is out of sync with the in-memory entries — metadata changes do not produce the dot because they save immediately on edit.</p>
+<p>When a tab has changes that have not yet been written to its dictionary file, a dot (●) appears before the tab name. It covers every change to the tab: entries added, edited, deleted, copied or moved in, Find &amp; Replace, and the metadata that goes with them. Undoing back to the last saved state clears the dot again.</p>
 <h1 id="4-the-dictionary-table">4. The Dictionary Table</h1>
 <p>Each tab shows its dictionary as a table. The columns are:</p>
 <table>
@@ -359,7 +359,7 @@ hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
 <p>The Steno field auto-capitalises as you type. Steno is conventionally written in upper case, and forcing it removes the need to hold Shift or toggle Caps Lock for every entry.</p>
 <h2 id="deleting">Deleting</h2>
 <p>Select one or more rows, then either press Delete, choose Edit → Delete Selected, or right-click → Delete. A confirmation prompt appears; for a single row it shows the steno key, for multiple rows it shows the count.</p>
-<p>Deleted entries are removed from the in-memory dictionary immediately. Their metadata is also discarded. The dictionary file on disk is unchanged until the next save (or until the application closes).</p>
+<p>Deleted entries are removed from the in-memory dictionary immediately. Their metadata is discarded too, unless another row still uses the same steno. The dictionary file and its metadata on disk are unchanged until the next save.</p>
 <h2 id="cross-tab-transfer">Cross-tab transfer</h2>
 <p>Right-click a selection to access "Copy to →" and "Move to →" submenus listing every other open tab. Copying preserves the entries on the source tab; moving deletes them from the source after copying. Metadata travels with the entries in both cases.</p>
 <p>This is the main mechanism for mining other dictionaries: open the reference dictionary in one tab, your personal dictionary in another, select interesting entries in the reference, and copy them across.</p>
@@ -543,7 +543,7 @@ hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
 <li>Match case: when ticked, capitalisation must match exactly.</li>
 <li>Prev / Next: navigate between matches.</li>
 <li>Replace: replace in the currently selected match, then advance.</li>
-<li>Replace All: replace every match across the entire dictionary in one operation. Because Replace All cannot be undone, a confirmation dialog shows the match count before proceeding and recommends saving first.</li>
+<li>Replace All: replace every match across the entire dictionary in one operation. A confirmation shows how many entries will change. Replace All is a single undoable change, so Ctrl+Z reverses all of it.</li>
 <li>Close: dismiss the dialog and clear find highlighting.</li>
 </ul>
 <h2 id="highlighting">Highlighting</h2>
@@ -554,7 +554,7 @@ hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
 <li>Find — and the Prev / Next / Replace buttons — operates only on the currently visible (filtered) rows. If a search or filter is hiding rows in the tab, Find won't see them.</li>
 <li>Replace All operates on every entry in the dictionary, regardless of search or filter state.</li>
 </ul>
-<p>This is intentional: Find should match what’s on screen, and Replace All should be a sweeping operation that won’t leave instances behind in hidden rows. Be deliberate when using Replace All — it really does mean every entry, and it cannot be undone. The automatic pre-save backup (Section 13) provides a recovery path if you need to roll back.</p>
+<p>This is intentional: Find should match what’s on screen, and Replace All should be a sweeping operation that won’t leave instances behind in hidden rows. Be deliberate when using Replace All — it really does mean every entry. If the result isn't what you wanted, Ctrl+Z undoes the whole replacement in one step.</p>
 <h2 id="case-sensitivity">Case sensitivity</h2>
 <p>Match case is off by default, so a search for "the" matches "The" and "THE". Tick the checkbox to require an exact case match. The match count updates immediately when the checkbox state changes.</p>
 <h2 id="what-gets-stamped">What gets stamped</h2>

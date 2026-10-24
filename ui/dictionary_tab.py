@@ -9,7 +9,9 @@ from datetime import datetime
 from tksheet import Sheet
 
 from logic.settings_store import load_settings, save_settings
-from logic.metadata_store import save_metadata, ensure_metadata
+from logic.metadata_store import (
+    save_metadata, ensure_metadata, default_metadata, merge_metadata,
+)
 from logic.dictionary_writer import write_dictionary
 from logic.undo_stack import UndoStack
 from ui.searchbar import SearchBar
@@ -48,6 +50,99 @@ def center_on_parent(dialog, parent):
 
 def _style_dialog(dialog):
     dialog.configure(bg=C["bg_panel"])
+
+
+def _today() -> str:
+    return datetime.now().strftime("%Y-%m-%d")
+
+
+class _Change:
+    """
+    One undoable edit to a tab, built up step by step and pushed onto the
+    undo stack by commit().
+
+    Every change to entries or metadata goes through one of these, so undo
+    can always reverse it exactly and the unsaved-changes flag (which is
+    derived from the undo stack) never misses an edit.  Metadata is keyed by
+    steno and may be shared by several rows, so the before-state of each key
+    is recorded the first time it is touched and restored as a whole.
+    """
+
+    def __init__(self, tab, label: str):
+        self.tab = tab
+        self.label = label
+        if tab.metadata is None:
+            tab.metadata = {}
+        self._conflicts_before = set(tab.conflict_stenos)
+        self.added: list = []
+        self.removed: list = []     # (entry, original position)
+        self._changed: dict = {}    # id(entry) -> (entry, values before)
+        self._meta_before: dict = {}  # steno -> metadata copy, or None if absent
+
+    def add(self, entry: dict) -> dict:
+        self.tab.entries.append(entry)
+        self.added.append(entry)
+        return entry
+
+    def remove(self, entries) -> None:
+        """Remove entries by identity.  Call at most once per change."""
+        targets = {id(e) for e in entries}
+        kept = []
+        for i, e in enumerate(self.tab.entries):
+            if id(e) in targets:
+                self.removed.append((e, i))
+            else:
+                kept.append(e)
+        self.tab.entries = kept
+
+    def update(self, entry: dict, **fields) -> None:
+        if id(entry) not in self._changed:
+            self._changed[id(entry)] = (entry, dict(entry))
+        entry.update(fields)
+
+    def old_values(self) -> list:
+        """The values each updated entry had before this change."""
+        return [old for _ref, old in self._changed.values()]
+
+    def set_meta(self, steno: str, meta: dict) -> None:
+        self._touch(steno)
+        self.tab.metadata[steno] = meta
+
+    def drop_unused_meta(self, stenos) -> None:
+        """Delete metadata (and bookmarks) for stenos no row uses any more."""
+        in_use = {e["steno"] for e in self.tab.entries}
+        for steno in set(stenos) - in_use:
+            if steno in self.tab.metadata:
+                self._touch(steno)
+                del self.tab.metadata[steno]
+            self.tab.bookmarked_stenos.discard(steno)
+
+    def _touch(self, steno: str) -> None:
+        if steno not in self._meta_before:
+            current = self.tab.metadata.get(steno)
+            self._meta_before[steno] = copy.deepcopy(current) if current is not None else None
+
+    def commit(self) -> bool:
+        """Record the change for undo and refresh the tab.  False if nothing changed."""
+        if not (self.added or self.removed or self._changed or self._meta_before):
+            return False
+        metadata = self.tab.metadata
+        frame = {
+            "label":       self.label,
+            "added":       list(self.added),
+            "removed":     list(self.removed),
+            "changed":     [(ref, old, dict(ref)) for ref, old in self._changed.values()],
+            "meta_before": self._meta_before,
+            "meta_after":  {
+                k: copy.deepcopy(metadata[k]) if k in metadata else None
+                for k in self._meta_before
+            },
+        }
+        self.tab._undo_stack.push(frame)
+        self.tab._metadata_dirty = True
+        self.tab._set_dirty(True)
+        self.tab._after_entries_changed(self._conflicts_before)
+        return True
 
 
 class DictionaryTab(ttk.Frame):
@@ -884,36 +979,49 @@ class DictionaryTab(ttk.Frame):
         # explicitly when they need it.
         self.filtered_entries = list(entries)
 
-    def add_entry(self, entry):
-        before = set(self.conflict_stenos)
-        self.entries.append(entry)
-        self._set_dirty()
-        self._rebuild_conflict_stenos()
-        new_conflicts = self._detect_new_conflicts(before, self.conflict_stenos)
-        if new_conflicts:
-            self._show_conflict_banner(new_conflicts)
-        self._refresh_dictionary_header()
-        self._apply_filters()
+    def _begin_change(self, label: str) -> _Change:
+        """Start an undoable edit; see _Change."""
+        return _Change(self, label)
 
-    def edit_selected_entry(self, updated_entry):
-        rows = self._selected_rows()
-        if not rows:
-            return
-        # Locate the exact entry object represented by the selected row.
-        target = self._entry_for_row(rows[0])
-        if target is None:
-            return
-        old_steno = target["steno"]
-        before = set(self.conflict_stenos)
-        target.update(updated_entry)
-        # If the steno key changed, conflicts and metadata may need adjustment
-        if updated_entry.get("steno") and updated_entry["steno"] != old_steno:
-            self._rebuild_conflict_stenos()
-            new_conflicts = self._detect_new_conflicts(before, self.conflict_stenos)
+    def _after_entries_changed(self, conflicts_before: set | None):
+        """Refresh derived state and the table after entries changed.
+        Pass the conflict set from before the change to announce new
+        conflicts, or None (undo / redo) to stay quiet."""
+        self._rebuild_conflict_stenos()
+        if conflicts_before is not None:
+            new_conflicts = self.conflict_stenos - conflicts_before
             if new_conflicts:
                 self._show_conflict_banner(new_conflicts)
         self._refresh_dictionary_header()
         self._apply_filters()
+        if self.on_entries_changed:
+            self.on_entries_changed(len(self.entries))
+
+    def _retarget_metadata(self, change: _Change, entry: dict, old_steno: str,
+                           modified: str, brief: bool | None = None,
+                           comments: str | None = None) -> None:
+        """
+        Update metadata after `entry` was edited, possibly moving from
+        old_steno to a new steno.  The caller drops old_steno's metadata
+        with change.drop_unused_meta once no row uses it; it is kept while
+        another row still shares it.
+        """
+        new_steno = entry["steno"]
+        source = self.metadata.get(old_steno) or default_metadata(
+            entry.get("date_added", modified), modified)
+        target = self.metadata.get(new_steno) if new_steno != old_steno else None
+
+        if target is not None:
+            meta = merge_metadata(target, modified=modified,
+                                    brief=brief, comments=comments)
+        else:
+            meta = dict(source)
+            meta["modified"] = modified
+            if brief is not None:
+                meta["brief"] = brief
+            if comments is not None:
+                meta["comments"] = comments
+        change.set_meta(new_steno, meta)
 
     def apply_search(self, config):
         self.search_config = config
@@ -1005,71 +1113,19 @@ class DictionaryTab(ttk.Frame):
             if not messagebox.askyesno("Delete", f"Delete {label}?"):
                 return
 
-        # Identify entries by Python object identity rather than by
-        # (steno, english) pair.  When two entries genuinely share the
-        # same steno+english (a literal duplicate), pair-based identity
-        # can't tell which row the user actually clicked.
-        targets = {id(e) for e in selected}
-
-        if not targets:
-            return
-
-        # ── Capture undo frame before mutating ─────────────────────────
-        # Keep the original entry objects (not copies) so undo can
-        # re-insert them by identity, and redo can remove them by identity.
-        entries_to_delete = [e for e in self.entries if id(e) in targets]
-        positions         = [i for i, e in enumerate(self.entries) if id(e) in targets]
-        meta_snap         = {
-            e["steno"]: copy.deepcopy((self.metadata or {}).get(e["steno"], {}))
-            for e in entries_to_delete
-        }
-        n = len(entries_to_delete)
-        self._undo_stack.push({
-            "op":      "delete",
-            "label":   "Delete Entry" if n == 1 else f"Delete {n} Entries",
-            "entries": list(zip(entries_to_delete, positions)),  # [(ref, pos), …]
-            "meta":    meta_snap,
-        })
-        # ───────────────────────────────────────────────────────────────
-
-        new_entries = [e for e in self.entries if id(e) not in targets]
-
-        # Recompute which stenos disappeared entirely so we can clean up
-        # bookmarks and metadata for them.  A steno might still be present
-        # in new_entries via another row sharing the same key.
-        old_stenos = {e["steno"] for e in self.entries}
-        new_stenos = {e["steno"] for e in new_entries}
-        removed_stenos = old_stenos - new_stenos
-        for s in removed_stenos:
-            self.bookmarked_stenos.discard(s)
-            if self.metadata:
-                self.metadata.pop(s, None)
-
-        # Recompute conflicts: a steno is no longer in conflict if it now
-        # appears 0 or 1 times.
-        steno_counts: dict = {}
-        for e in new_entries:
-            steno_counts[e["steno"]] = steno_counts.get(e["steno"], 0) + 1
-        for s in list(self.conflict_stenos):
-            if steno_counts.get(s, 0) <= 1:
-                self.conflict_stenos.discard(s)
-
-        self.entries = new_entries
-        self._metadata_dirty = True
-        self._set_dirty()
-        self._refresh_dictionary_header()
-        self._apply_filters()
-        if self.on_entries_changed:
-            self.on_entries_changed(len(self.entries))
+        # Entries are removed by object identity rather than by (steno,
+        # english) pair: when two rows are literal duplicates, pair-based
+        # identity can't tell which row the user actually clicked.  Metadata
+        # is only dropped for stenos no remaining row shares.
+        n = len(selected)
+        change = self._begin_change("Delete Entry" if n == 1 else f"Delete {n} Entries")
+        change.remove(selected)
+        change.drop_unused_meta(e["steno"] for e in selected)
+        change.commit()
 
     # ------------------------------------------------------------------
     # Undo / Redo
     # ------------------------------------------------------------------
-    def _push_undo_frame(self, frame: dict) -> None:
-        """Push a frame onto the undo stack and update the dirty flag."""
-        self._undo_stack.push(frame)
-        self._set_dirty(True)
-
     def undo(self) -> None:
         """Reverse the most recent undoable operation."""
         frame = self._undo_stack.pop_undo()
@@ -1085,94 +1141,52 @@ class DictionaryTab(ttk.Frame):
         self._apply_undo_redo_frame(frame, direction="redo")
 
     def _apply_undo_redo_frame(self, frame: dict, direction: str) -> None:
-        op = frame["op"]
+        """Reverse (undo) or replay (redo) a frame recorded by _Change.commit."""
+        if direction == "undo":
+            added = {id(e) for e in frame["added"]}
+            if added:
+                self.entries = [e for e in self.entries if id(e) not in added]
+            for ref, old, _new in frame["changed"]:
+                ref.clear()
+                ref.update(old)
+            # Re-insert removed entries at their recorded positions.  Sort
+            # ascending so earlier insertions don't shift later ones.
+            for ref, pos in sorted(frame["removed"], key=lambda x: x[1]):
+                self.entries.insert(min(pos, len(self.entries)), ref)
+            meta_state = frame["meta_before"]
+        else:
+            removed = {id(ref) for ref, _pos in frame["removed"]}
+            if removed:
+                self.entries = [e for e in self.entries if id(e) not in removed]
+            for ref, _old, new in frame["changed"]:
+                ref.clear()
+                ref.update(new)
+            self.entries.extend(frame["added"])
+            meta_state = frame["meta_after"]
 
-        if op == "add":
-            if direction == "undo":
-                # Remove the added entry by object identity
-                ref = frame["entry_ref"]
-                self.entries = [e for e in self.entries if e is not ref]
-                if self.metadata is not None:
-                    self.metadata.pop(frame["steno"], None)
-            else:  # redo
-                self.entries.append(frame["entry_ref"])
-                if self.metadata is not None:
-                    self.metadata[frame["steno"]] = copy.deepcopy(frame["meta"])
+        for steno, meta in meta_state.items():
+            if meta is None:
+                self.metadata.pop(steno, None)
+            else:
+                self.metadata[steno] = copy.deepcopy(meta)
 
-        elif op == "edit":
-            ref = frame["entry_ref"]
-            if direction == "undo":
-                restore_values = frame["old_values"]
-                restore_meta_key = frame["old_meta_key"]
-                restore_meta = frame["old_meta"]
-                remove_meta_key = frame["new_meta_key"]
-            else:  # redo
-                restore_values = frame["new_values"]
-                restore_meta_key = frame["new_meta_key"]
-                restore_meta = frame["new_meta"]
-                remove_meta_key = frame["old_meta_key"]
-
-            # Restore the entry dict in-place (ref is still in self.entries)
-            ref.clear()
-            ref.update(restore_values)
-
-            # Fix metadata: remove the key we're moving away from (if it changed)
-            if self.metadata is not None:
-                if remove_meta_key != restore_meta_key:
-                    self.metadata.pop(remove_meta_key, None)
-                self.metadata[restore_meta_key] = copy.deepcopy(restore_meta)
-
-        elif op == "delete":
-            if direction == "undo":
-                # Re-insert original entry objects at their recorded positions.
-                # Sort ascending so earlier insertions don't shift later ones.
-                for ref, pos in sorted(frame["entries"], key=lambda x: x[1]):
-                    pos = min(pos, len(self.entries))
-                    self.entries.insert(pos, ref)
-                    steno = ref["steno"]
-                    if self.metadata is not None and steno in frame["meta"]:
-                        self.metadata[steno] = copy.deepcopy(frame["meta"][steno])
-            else:  # redo
-                targets = {id(ref) for ref, _ in frame["entries"]}
-                new_entries = [e for e in self.entries if id(e) not in targets]
-                # Clean up metadata for stenos no longer present
-                new_stenos = {e["steno"] for e in new_entries}
-                if self.metadata is not None:
-                    for ref, _ in frame["entries"]:
-                        if ref["steno"] not in new_stenos:
-                            self.metadata.pop(ref["steno"], None)
-                self.entries = new_entries
-
-        self._rebuild_conflict_stenos()
         self._metadata_dirty = True
-        if not self._undo_stack.is_dirty:
-            self._save_metadata_if_dirty()
-        self._apply_filters()
         self._set_dirty(self._undo_stack.is_dirty)
-        self._refresh_dictionary_header()
-        if self.on_entries_changed:
-            self.on_entries_changed(len(self.entries))
+        self._after_entries_changed(None)
 
     # ------------------------------------------------------------------
     # Cross-dictionary receive (copy / move)
     # ------------------------------------------------------------------
-    def receive_entries(self, entries_with_meta):
-        before = set(self.conflict_stenos)
+    def receive_entries(self, entries_with_meta, label="Copy Entries"):
+        """Add copies of entries from another tab, as one undoable change.
+        Existing metadata for a steno is kept; otherwise the sender's is copied."""
+        change = self._begin_change(label)
+        today = _today()
         for entry, meta in entries_with_meta:
-            steno = entry["steno"]
-            self.entries.append(dict(entry))
-            if self.metadata is not None and steno not in self.metadata:
-                self.metadata[steno] = dict(meta) if meta else {}
-                self._metadata_dirty = True
-        self._set_dirty()
-        self._rebuild_conflict_stenos()
-        new_conflicts = self._detect_new_conflicts(before, self.conflict_stenos)
-        if new_conflicts:
-            self._show_conflict_banner(new_conflicts)
-        self._refresh_dictionary_header()
-        self._apply_filters()
-        if self.on_entries_changed:
-            self.on_entries_changed(len(self.entries))
+            steno = change.add(dict(entry))["steno"]
+            if steno not in self.metadata:
+                change.set_meta(steno, dict(meta) if meta else default_metadata(today, today))
+        change.commit()
 
     # ------------------------------------------------------------------
     # Right-click context menu
@@ -1218,14 +1232,14 @@ class DictionaryTab(ttk.Frame):
             return {}
         return {n: t for n, t in app.tabs.items() if t is not self}
 
-    def _copy_selected_to(self, target_tab):
+    def _copy_selected_to(self, target_tab, label="Copy Entries"):
         payload = []
         for entry in self._selected_entries():
             payload.append((entry, (self.metadata or {}).get(entry["steno"], {})))
-        target_tab.receive_entries(payload)
+        target_tab.receive_entries(payload, label=label)
 
     def _move_selected_to(self, target_tab):
-        self._copy_selected_to(target_tab)
+        self._copy_selected_to(target_tab, label="Move Entries")
         self.delete_selected(confirm=False)
 
     # ------------------------------------------------------------------
@@ -1712,10 +1726,6 @@ class DictionaryTab(ttk.Frame):
         except tk.TclError:
             pass
 
-    def _detect_new_conflicts(self, before: set, after: set) -> set:
-        """Return the set of stenos that became conflicts since 'before'."""
-        return after - before
-
     # ------------------------------------------------------------------
     # Column width persistence
     # ------------------------------------------------------------------
@@ -1917,82 +1927,35 @@ class DictionaryTab(ttk.Frame):
             steno_error_var.set("")
             steno_entry.state(["!invalid"])
 
-            updated = dict(entry)
-            updated["steno"]    = steno_input
-            updated["english"]  = english_var.get().strip()
-            updated["brief"]    = brief_var.get()
-            updated["comments"] = ct.get("1.0", "end-1c").strip()
-            updated["modified"] = datetime.now().strftime("%Y-%m-%d")
+            english  = english_var.get().strip()
+            brief    = brief_var.get()
+            comments = ct.get("1.0", "end-1c").strip()
+            today    = _today()
 
+            # Metadata is only written to disk together with the dictionary
+            # (save_json), so discarding unsaved changes discards both.
             if is_new:
-                self.add_entry(updated)
-                new_meta = {
-                    "date_added": updated.get("date_added", updated["modified"]),
-                    "modified":   updated["modified"],
-                    "brief":      updated["brief"],
-                    "comments":   updated["comments"],
-                    "bookmarked": False,
-                    "frequency":  0,
-                }
-                if self.metadata is not None:
-                    self.metadata[updated["steno"]] = new_meta
-                # Push undo frame: entry_ref is the object just appended
-                self._push_undo_frame({
-                    "op":        "add",
-                    "label":     "Add Entry",
-                    "entry_ref": self.entries[-1],
-                    "steno":     updated["steno"],
-                    "meta":      copy.deepcopy(new_meta),
+                change = self._begin_change("Add Entry")
+                change.add({
+                    "steno": steno_input, "english": english,
+                    "date_added": today, "modified": today,
                 })
+                existing = self.metadata.get(steno_input)
+                if existing is None:
+                    meta = default_metadata(today, today)
+                    meta.update(brief=brief, comments=comments)
+                else:
+                    meta = merge_metadata(existing, modified=today,
+                                            brief=brief, comments=comments)
+                change.set_meta(steno_input, meta)
             else:
-                orig_steno  = entry["steno"]
-                old_values  = dict(entry)         # snapshot before edit
-                old_meta    = copy.deepcopy((self.metadata or {}).get(orig_steno, {}))
-
-                self.edit_selected_entry(updated)
-
-                if self.metadata is not None:
-                    if updated["steno"] != orig_steno:
-                        self.metadata.pop(orig_steno, None)
-                        self.bookmarked_stenos.discard(orig_steno)
-                    self.metadata[updated["steno"]] = {
-                        "date_added": old_meta.get("date_added", entry.get("date_added", "")),
-                        "modified":   updated["modified"],
-                        "brief":      updated["brief"],
-                        "comments":   updated["comments"],
-                        "bookmarked": old_meta.get("bookmarked", False),
-                        "frequency":  old_meta.get("frequency", 0),
-                    }
-                new_meta = copy.deepcopy((self.metadata or {}).get(updated["steno"], {}))
-                # Push undo frame: entry is the dict that was mutated in-place
-                self._push_undo_frame({
-                    "op":          "edit",
-                    "label":       "Edit Entry",
-                    "entry_ref":   entry,
-                    "old_values":  old_values,
-                    "new_values":  dict(entry),   # entry was mutated in-place
-                    "old_meta_key": orig_steno,
-                    "new_meta_key": updated["steno"],
-                    "old_meta":    old_meta,
-                    "new_meta":    new_meta,
-                })
-
-            self._metadata_dirty = True
-            if self.dict_path and self.metadata is not None:
-                try:
-                    save_metadata(self.dict_path, self.metadata)
-                    self._metadata_dirty = False
-                except Exception as e:
-                    messagebox.showerror(
-                        "Metadata Save Error",
-                        f"Failed to save entry metadata:\n{e}",
-                    )
-
-            self._rebuild_conflict_stenos()
-            self._refresh_dictionary_header()
-            self._apply_filters()
-            if self.on_entries_changed:
-                self.on_entries_changed(len(self.entries))
+                old_steno = entry["steno"]
+                change = self._begin_change("Edit Entry")
+                change.update(entry, steno=steno_input, english=english, modified=today)
+                self._retarget_metadata(change, entry, old_steno, today,
+                                        brief=brief, comments=comments)
+                change.drop_unused_meta([old_steno])
+            change.commit()
             dlg.destroy()
 
         ttk.Button(bf, text="Cancel", command=dlg.destroy).pack(side=tk.RIGHT, padx=(0, 6))

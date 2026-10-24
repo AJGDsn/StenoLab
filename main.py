@@ -1074,9 +1074,9 @@ class StenoApp(tk.Tk):
         changes; the user can save the ones they want, discard everything,
         or cancel and stay open.
 
-        Tabs with no dirty JSON state never enter the prompt — they're
-        already in sync with disk for their dictionaries, and metadata
-        changes save immediately on edit, so they have nothing at risk.
+        Tabs with no unsaved changes never enter the prompt — their
+        dictionary and metadata are already in sync with disk (metadata
+        is saved together with the dictionary).
         """
         from ui.save_changes_dialog import (
             ask_save_changes, RESULT_SAVE, RESULT_DISCARD, RESULT_CANCEL,
@@ -1415,14 +1415,21 @@ class StenoApp(tk.Tk):
             return
 
         updated = self._apply_frequency_map_to_tab(tab, freq_map)
-        try:
-            save_metadata(tab.dict_path, tab.metadata or {})
-        except Exception as e:
-            messagebox.showerror(
-                "Import Frequency List",
-                f"Imported frequencies but failed to save metadata:\n\n{e}",
-            )
-            return
+        # Metadata is saved together with the dictionary.  With unsaved
+        # edits pending, writing it now would also write those edits'
+        # metadata ahead of the dictionary, so the import waits for Save.
+        deferred = bool(getattr(tab, "_json_dirty", False))
+        if deferred:
+            tab._metadata_dirty = True
+        else:
+            try:
+                save_metadata(tab.dict_path, tab.metadata or {})
+            except Exception as e:
+                messagebox.showerror(
+                    "Import Frequency List",
+                    f"Imported frequencies but failed to save metadata:\n\n{e}",
+                )
+                return
         if hasattr(tab, "_refresh_dictionary_header"):
             tab._refresh_dictionary_header()
 
@@ -1431,11 +1438,14 @@ class StenoApp(tk.Tk):
         except Exception:
             pass
 
-        self.statusbar.update_status(saved=datetime.now().strftime("%H:%M"))
+        if not deferred:
+            self.statusbar.update_status(saved=datetime.now().strftime("%H:%M"))
         messagebox.showinfo(
             "Import Frequency List",
             f"Imported frequencies from {source}.\n"
-            f"Updated {updated:,} entries.",
+            f"Updated {updated:,} entries."
+            + ("\n\nThey will be saved with your other unsaved changes."
+               if deferred else ""),
         )
 
     def _apply_frequency_map_to_tab(self, tab, freq_map: dict[str, int]) -> int:
@@ -1609,8 +1619,9 @@ class StenoApp(tk.Tk):
         before the restore.
         """
         from ui.restore_backup_dialog import RestoreBackupDialog
-        from logic.backup_store import backup_dictionary
-        import shutil
+        from logic.backup_store import (
+            backup_dictionary, read_backup_contents, write_restored_contents,
+        )
 
         tab = self._get_active_tab()
         if tab is None or not getattr(tab, "dict_path", None):
@@ -1648,6 +1659,17 @@ class StenoApp(tk.Tk):
         if not confirm:
             return
 
+        # Read the chosen backup first: the safety snapshot below prunes old
+        # backups and could otherwise delete the one being restored.
+        try:
+            dict_bytes, meta_bytes = read_backup_contents(backup)
+        except OSError as e:
+            messagebox.showerror(
+                "Restore Failed",
+                f"Could not read the backup:\n\n{e}",
+            )
+            return
+
         # Snapshot current state before replacing
         try:
             ok, msg = backup_dictionary(tab.dict_path, kind="save")
@@ -1663,34 +1685,14 @@ class StenoApp(tk.Tk):
             if not cont:
                 return
 
-        # Copy the backup's dictionary file into place
         try:
-            shutil.copy2(backup["dict_path"], tab.dict_path)
+            write_restored_contents(tab.dict_path, dict_bytes, meta_bytes)
         except OSError as e:
             messagebox.showerror(
                 "Restore Failed",
                 f"Could not restore backup:\n\n{e}",
             )
             return
-
-        # Restore the matching metadata sidecar if it exists.  If the chosen
-        # backup has no metadata, remove current metadata so stale comments,
-        # brief flags, dates, or frequencies do not leak into the restored file.
-        try:
-            from logic.metadata_store import _metadata_file_for, _metadata_files_for_all_locations
-            meta_dst = _metadata_file_for(tab.dict_path)
-            if backup.get("metadata_path"):
-                shutil.copy2(backup["metadata_path"], meta_dst)
-            else:
-                for stale_meta in _metadata_files_for_all_locations(tab.dict_path):
-                    try:
-                        if os.path.exists(stale_meta):
-                            os.remove(stale_meta)
-                    except OSError:
-                        pass
-        except OSError:
-            # Non-fatal - the dictionary itself restored fine
-            pass
 
         # Reload the tab from the restored file
         try:

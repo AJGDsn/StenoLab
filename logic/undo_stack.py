@@ -16,7 +16,9 @@ class UndoStack:
         self._redo: list = []   # most-recently-undone frame at end
         # Distance from the last-saved state.  0 means "matches disk".
         # Positive = unsaved edits on top.  Negative = undone past last save.
-        self._dirty_delta: int = 0
+        # None = the saved state can no longer be reached (an edit was made
+        # after undoing past it), so the tab stays dirty until the next save.
+        self._dirty_delta: int | None = 0
 
     # ── State queries ───────────────────────────────────────────────────
 
@@ -39,7 +41,11 @@ class UndoStack:
         """Record a new undoable operation.  Clears the redo stack."""
         self._undo.append(frame)
         self._redo.clear()
-        self._dirty_delta += 1
+        if self._dirty_delta is not None and self._dirty_delta < 0:
+            # The saved state was on the redo branch just discarded.
+            self._dirty_delta = None
+        elif self._dirty_delta is not None:
+            self._dirty_delta += 1
 
     def mark_saved(self) -> None:
         """
@@ -64,7 +70,8 @@ class UndoStack:
             return None
         frame = self._undo.pop()
         self._redo.append(frame)
-        self._dirty_delta -= 1
+        if self._dirty_delta is not None:
+            self._dirty_delta -= 1
         return frame
 
     def pop_redo(self) -> dict | None:
@@ -76,5 +83,6 @@ class UndoStack:
             return None
         frame = self._redo.pop()
         self._undo.append(frame)
-        self._dirty_delta += 1
+        if self._dirty_delta is not None:
+            self._dirty_delta += 1
         return frame

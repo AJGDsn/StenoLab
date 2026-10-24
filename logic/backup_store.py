@@ -38,7 +38,8 @@ import shutil
 import hashlib
 from datetime import datetime
 
-from .metadata_store import _metadata_file_for
+from .file_io import atomic_write_bytes
+from .metadata_store import _metadata_file_for, _metadata_files_for_all_locations
 from .storage_paths import BACKUP_ROOT, LEGACY_BACKUP_ROOT
 
 # Separate retention limits for each backup kind.
@@ -178,6 +179,48 @@ def backup_dictionary(dict_path: str, kind: str = "save") -> tuple[bool, str]:
 
     except OSError as e:
         return False, str(e)
+
+
+def read_backup_contents(backup: dict) -> tuple[bytes, bytes | None]:
+    """
+    Read a backup's dictionary (and metadata, if any) into memory.
+
+    Restoring must read the backup before taking the safety snapshot of the
+    current file: that snapshot prunes old backups and can delete the very
+    backup being restored.
+    """
+    with open(backup["dict_path"], "rb") as f:
+        dict_bytes = f.read()
+    meta_bytes = None
+    if backup.get("metadata_path"):
+        try:
+            with open(backup["metadata_path"], "rb") as f:
+                meta_bytes = f.read()
+        except OSError:
+            meta_bytes = None
+    return dict_bytes, meta_bytes
+
+
+def write_restored_contents(dict_path: str, dict_bytes: bytes,
+                            meta_bytes: bytes | None) -> None:
+    """
+    Put backup contents in place of the dictionary and its metadata.
+
+    When the backup has no metadata, current metadata is removed so stale
+    comments, brief flags, dates or frequencies do not leak into the
+    restored file.  Metadata problems are non-fatal; dictionary ones raise.
+    """
+    atomic_write_bytes(dict_path, dict_bytes)
+    try:
+        if meta_bytes is not None:
+            os.makedirs(os.path.dirname(_metadata_file_for(dict_path)), exist_ok=True)
+            atomic_write_bytes(_metadata_file_for(dict_path), meta_bytes)
+        else:
+            for stale in _metadata_files_for_all_locations(dict_path):
+                if os.path.exists(stale):
+                    os.remove(stale)
+    except OSError:
+        pass
 
 
 def _prune_old_backups(dict_path: str) -> None:

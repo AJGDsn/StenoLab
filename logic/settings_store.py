@@ -2,6 +2,7 @@
 import json
 import os
 
+from .file_io import atomic_write_text
 from .storage_paths import SETTINGS_PATH, LEGACY_SETTINGS_PATH
 
 def _ensure_settings_folder():
@@ -29,9 +30,6 @@ def load_settings():
 def save_settings(settings: dict):
     _ensure_settings_folder()
     try:
-        with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
-            json.dump(settings, f, indent=2)
-            f.flush()
-            os.fsync(f.fileno())
+        atomic_write_text(SETTINGS_PATH, json.dumps(settings, indent=2))
     except Exception as e:
         print(f"[StenoEditor] Failed to save settings to {SETTINGS_PATH}: {e}")

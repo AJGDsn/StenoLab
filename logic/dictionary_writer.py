@@ -2,6 +2,7 @@
 import json
 
 from .dictionary_loader import load_dictionary_with_metadata, read_rtf_header
+from .file_io import atomic_write_text
 from .metadata_store import save_metadata
 from .rtf_dictionary import is_rtf_path, write_rtf_dictionary
 
@@ -31,8 +32,7 @@ def write_dictionary(entries, dict_path: str) -> None:
     serialized = serialize_dictionary(entries, dict_path)
     # newline="" keeps the RTF writer's CRLFs as written.
     newline = "" if is_rtf_path(dict_path) else None
-    with open(dict_path, "w", encoding="utf-8", newline=newline) as f:
-        f.write(serialized)
+    atomic_write_text(dict_path, serialized, newline=newline)
 
 
 def convert_dictionary(src_path: str, dst_path: str) -> int:
