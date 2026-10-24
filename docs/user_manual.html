@@ -1,0 +1,859 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StenoLab</title>
+<style>
+:root{--fg:#1f252c;--muted:#5b6672;--accent:#178f88;--border:#dce3ec;
+--bg:#ffffff;--bg-soft:#f5f8fb;--code:#eef3f8;}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--fg);
+font:16px/1.65 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
+.wrap{max-width:860px;margin:0 auto;padding:40px 24px 80px;}
+h1,h2,h3{line-height:1.25;color:#10211f;}
+h1{font-size:2em;margin:1.4em 0 .5em;padding-bottom:.25em;border-bottom:2px solid var(--accent);}
+h1:first-of-type{margin-top:0;}
+h2{font-size:1.4em;margin:1.8em 0 .5em;padding-bottom:.2em;border-bottom:1px solid var(--border);}
+h3{font-size:1.15em;margin:1.4em 0 .4em;}
+a{color:var(--accent);text-decoration:none;}
+a:hover{text-decoration:underline;}
+code{background:var(--code);padding:.12em .35em;border-radius:4px;
+font:.9em SFMono-Regular,Consolas,Menlo,monospace;}
+pre{background:var(--code);padding:14px 16px;border-radius:8px;overflow:auto;}
+pre code{background:none;padding:0;}
+table{border-collapse:collapse;width:100%;margin:1em 0;font-size:.95em;}
+th,td{border:1px solid var(--border);padding:8px 12px;text-align:left;vertical-align:top;}
+th{background:var(--bg-soft);}
+tr:nth-child(even) td{background:#fafcfe;}
+blockquote{border-left:3px solid var(--accent);margin:1em 0;padding:.2em 1em;color:var(--muted);}
+.docheader{margin-bottom:1.5em;}
+.docheader .sub{color:var(--muted);font-size:1.05em;margin:.2em 0;}
+.toc{background:var(--bg-soft);border:1px solid var(--border);border-radius:10px;
+padding:8px 22px;margin:1.5em 0 2.5em;}
+.toc .toctitle{font-weight:700;font-size:1.1em;color:#10211f;}
+.toc ul{list-style:none;padding-left:1.1em;}
+.toc>ul{padding-left:0;}
+.toc li{margin:.15em 0;}
+hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
+@media print{.toc{break-inside:avoid;} a{color:var(--fg);}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="docheader">
+<h1>StenoLab</h1>
+<p class="sub">User Manual &mdash; reference for hobbyist users of Plover and on-keyboard steno engines</p>
+</div>
+<nav class="toc"><div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#1-overview">1. Overview</a></li>
+<li><a href="#2-the-main-window">2. The Main Window</a><ul>
+<li><a href="#menu-bar">Menu bar</a></li>
+<li><a href="#toolbar">Toolbar</a></li>
+<li><a href="#search-panel">Search panel</a></li>
+<li><a href="#dictionary-tabs">Dictionary tabs</a></li>
+<li><a href="#tab-context-menu">Tab context menu</a></li>
+<li><a href="#status-bar">Status bar</a></li>
+</ul>
+</li>
+<li><a href="#3-working-with-dictionaries">3. Working with Dictionaries</a><ul>
+<li><a href="#opening-a-dictionary">Opening a dictionary</a></li>
+<li><a href="#multiple-dictionaries">Multiple dictionaries</a></li>
+<li><a href="#saving">Saving</a></li>
+<li><a href="#closing-a-dictionary">Closing a dictionary</a></li>
+<li><a href="#the-unsaved-changes-indicator">The unsaved-changes indicator</a></li>
+</ul>
+</li>
+<li><a href="#4-the-dictionary-table">4. The Dictionary Table</a><ul>
+<li><a href="#sorting">Sorting</a></li>
+<li><a href="#selection">Selection</a></li>
+<li><a href="#column-widths">Column widths</a></li>
+<li><a href="#row-colours">Row colours</a></li>
+<li><a href="#large-dictionaries">Large dictionaries</a></li>
+</ul>
+</li>
+<li><a href="#5-adding-editing-and-deleting-entries">5. Adding, Editing, and Deleting Entries</a><ul>
+<li><a href="#adding">Adding</a></li>
+<li><a href="#editing">Editing</a></li>
+<li><a href="#steno-validation">Steno validation</a></li>
+<li><a href="#deleting">Deleting</a></li>
+<li><a href="#cross-tab-transfer">Cross-tab transfer</a></li>
+<li><a href="#brief-flag">Brief flag</a></li>
+<li><a href="#comments">Comments</a></li>
+</ul>
+</li>
+<li><a href="#6-searching">6. Searching</a><ul>
+<li><a href="#the-search-panel">The search panel</a></li>
+<li><a href="#methods">Methods</a></li>
+<li><a href="#combining-the-two-axes">Combining the two axes</a></li>
+<li><a href="#whole-strokes-only">Whole strokes only</a></li>
+<li><a href="#scope">Scope</a></li>
+<li><a href="#type-ahead-filtering">Type-ahead filtering</a></li>
+<li><a href="#the-active-search-hint">The active-search hint</a></li>
+<li><a href="#clearing-the-search">Clearing the search</a></li>
+</ul>
+</li>
+<li><a href="#7-filtering">7. Filtering</a><ul>
+<li><a href="#entry-state-filters">Entry-state filters</a></li>
+<li><a href="#content-predicate-filters">Content-predicate filters</a></li>
+<li><a href="#frequency-filters">Frequency filters</a></li>
+<li><a href="#what-conflict-means">What "conflict" means</a></li>
+<li><a href="#conflict-warnings-on-edit">Conflict warnings on edit</a></li>
+<li><a href="#combining-filters-and-search">Combining filters and search</a></li>
+</ul>
+</li>
+<li><a href="#8-find-replace">8. Find &amp; Replace</a><ul>
+<li><a href="#dialog-layout">Dialog layout</a></li>
+<li><a href="#highlighting">Highlighting</a></li>
+<li><a href="#find-vs-replace-all-scope">Find vs. Replace All scope</a></li>
+<li><a href="#case-sensitivity">Case sensitivity</a></li>
+<li><a href="#what-gets-stamped">What gets stamped</a></li>
+<li><a href="#renaming-a-steno-key">Renaming a steno key</a></li>
+<li><a href="#closing">Closing</a></li>
+</ul>
+</li>
+<li><a href="#9-bookmarks">9. Bookmarks</a><ul>
+<li><a href="#toggling">Toggling</a></li>
+<li><a href="#visual-indicator">Visual indicator</a></li>
+<li><a href="#the-bookmarked-filter">The Bookmarked filter</a></li>
+<li><a href="#session-only">Session-only</a></li>
+</ul>
+</li>
+<li><a href="#10-view-options">10. View Options</a><ul>
+<li><a href="#dark-and-light-mode">Dark and light mode</a></li>
+<li><a href="#focus-mode">Focus mode</a></li>
+<li><a href="#show-frequency-column">Show frequency column</a></li>
+<li><a href="#panel-collapse-states">Panel collapse states</a></li>
+<li><a href="#column-widths_1">Column widths</a></li>
+<li><a href="#open-tabs">Open tabs</a></li>
+<li><a href="#what-does-not-persist">What does not persist</a></li>
+</ul>
+</li>
+<li><a href="#11-keyboard-shortcuts">11. Keyboard Shortcuts</a></li>
+<li><a href="#12-files-and-storage-appendix">12. Files and Storage (Appendix)</a><ul>
+<li><a href="#dictionary-files">Dictionary files</a></li>
+<li><a href="#metadata-sidecar-files">Metadata sidecar files</a></li>
+<li><a href="#backup-files">Backup files</a></li>
+<li><a href="#restoring-from-a-backup">Restoring from a backup</a></li>
+<li><a href="#settings-file">Settings file</a></li>
+<li><a href="#the-tools-menu">The Tools menu</a></li>
+<li><a href="#manual-backups">Manual backups</a></li>
+<li><a href="#sharing-dictionaries">Sharing dictionaries</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</nav>
+<h1 id="1-overview">1. Overview</h1>
+<p>StenoLab is a desktop application for managing steno dictionaries. It opens, edits, and saves dictionary files in the standard Plover JSON format and tracks per-entry metadata (creation date, modification date, brief flag, comments) in sidecar files.</p>
+<p>It is not a translation engine. It does not run live alongside steno input, and it does not replace Plover or on-keyboard translation firmware. Its purpose is curation: building, cleaning, and mining dictionaries.</p>
+<p>Multiple dictionaries can be open at once, each in its own tab. Entries can be copied or moved between tabs, which is useful when extracting briefs from a reference dictionary into a personal one or splitting a single working dictionary into themed files.</p>
+<h1 id="2-the-main-window">2. The Main Window</h1>
+<p>The window has five horizontal regions, top to bottom: the menu bar, the toolbar, the search panel, the dictionary tabs (each with its own filter panel and table), and the status bar.</p>
+<h2 id="menu-bar">Menu bar</h2>
+<p>Standard menus: File, Edit, Tools, View, and Help. Every command has a keyboard shortcut where one is meaningful; see Section 11 for the full list. <strong>Help → User Manual</strong> opens this manual in your default web browser.</p>
+<h2 id="toolbar">Toolbar</h2>
+<p>Seven icon buttons are arranged across the toolbar. The five action buttons on the left replicate the most common commands. Two history buttons — ↺ Undo and ↻ Redo — sit on the right. Hover any button to see its full label and keyboard shortcut as a tooltip.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Icon</td>
+<td>Action</td>
+<td>Notes</td>
+</tr>
+<tr>
+<td>⊞</td>
+<td>Open Dictionary</td>
+<td>Same as File → Open Dictionary.</td>
+</tr>
+<tr>
+<td>+</td>
+<td>Add Entry</td>
+<td>Opens the Add Entry dialog on the active tab.</td>
+</tr>
+<tr>
+<td>✎</td>
+<td>Edit Entry</td>
+<td>Opens the Edit dialog for the selected row.</td>
+</tr>
+<tr>
+<td>⌕</td>
+<td>Find &amp; Replace</td>
+<td>Opens the Find &amp; Replace dialog.</td>
+</tr>
+<tr>
+<td>★</td>
+<td>Toggle Bookmark</td>
+<td>Bookmarks or un-bookmarks all selected rows.</td>
+</tr>
+<tr>
+<td>↺</td>
+<td>Undo</td>
+<td>Undo the last add, edit, or delete. Sits on the right side of the toolbar; disabled when there is nothing to undo.</td>
+</tr>
+<tr>
+<td>↻</td>
+<td>Redo</td>
+<td>Replay the most recently undone operation. Disabled when there is nothing to redo.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="search-panel">Search panel</h2>
+<p>Two-axis search across steno and translation. Collapsible. Covered in detail in Section 6.</p>
+<h2 id="dictionary-tabs">Dictionary tabs</h2>
+<p>One tab per open dictionary. The tab title shows the dictionary name. A dot before the name (for example "● main") indicates unsaved changes; it disappears once the file is saved.</p>
+<p>Each tab has its own filter panel just below the tab strip. Filters and search both apply only to the active tab.</p>
+<h2 id="tab-context-menu">Tab context menu</h2>
+<p>Right-click a tab heading to access the most common per-dictionary operations without having to switch focus to the tab first:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Command</td>
+<td>What it does</td>
+</tr>
+<tr>
+<td>Save</td>
+<td>Save the dictionary. Greyed out when there are no unsaved changes.</td>
+</tr>
+<tr>
+<td>Save As...</td>
+<td>Save a copy to a new path, and continue editing under the new name. The original file is left untouched.</td>
+</tr>
+<tr>
+<td>Open Containing Folder</td>
+<td>Reveal the dictionary file in the system file browser.</td>
+</tr>
+<tr>
+<td>Restore Backup...</td>
+<td>Open the restore dialog for this dictionary (Section 12).</td>
+</tr>
+<tr>
+<td>Close</td>
+<td>Close this tab. Prompts about unsaved changes if any.</td>
+</tr>
+</tbody>
+</table>
+<p>The right-clicked tab is selected first, so subsequent operations always act on the tab you actually clicked rather than whichever happened to be active before.</p>
+<h2 id="status-bar">Status bar</h2>
+<p>Bottom of the window. Shows the active dictionary name, the total number of entries in that dictionary, and the count of dictionaries currently open.</p>
+<h1 id="3-working-with-dictionaries">3. Working with Dictionaries</h1>
+<h2 id="opening-a-dictionary">Opening a dictionary</h2>
+<p>File → Open Dictionary, or Ctrl+O, or the ⊞ toolbar button. The file picker accepts any JSON file. The expected format is a flat object mapping steno keys to translation strings — the same format Plover uses.</p>
+<p>Example: {"KAT": "cat", "TKOG": "dog"}</p>
+<p>Duplicate steno keys in the source file are preserved as separate entries rather than collapsed (a standard JSON parser would silently keep only the last value for a duplicate key). This matters because duplicates surface in the Conflicts filter, where they can be reviewed and resolved.</p>
+<h2 id="multiple-dictionaries">Multiple dictionaries</h2>
+<p>Each opened dictionary becomes a new tab. There is no fixed limit on how many can be open at once. Tabs persist across sessions: whichever dictionaries are open when the application closes will reopen on the next launch.</p>
+<h2 id="saving">Saving</h2>
+<p>File → Save Dictionary, or Ctrl+S. The active tab's dictionary is written back to its original file. Before each save StenoLab writes a timestamped backup of the previous file contents to its backup folder, so a previous version can always be recovered; see Section 12 for details on backups and restoration.</p>
+<p>Saving writes only the steno-to-translation mapping. Per-entry metadata (dates, brief flag, comments) lives in a separate file and is saved automatically whenever an entry is edited; see Section 12.</p>
+<h2 id="closing-a-dictionary">Closing a dictionary</h2>
+<p>File → Close Dictionary closes the active tab. If the tab has unsaved changes (the dot indicator is showing), StenoLab asks whether to save them, discard them, or cancel and keep the tab open.</p>
+<p>Closing the application — File → Exit, or the window close button — follows the same logic but considers all open tabs at once. If several have unsaved changes a single dialog lists them with checkboxes, defaulting to all ticked, so you can save the ones you want and discard the rest in one step. Tabs with no unsaved changes never appear in the dialog; their files are already in sync with disk.</p>
+<p>Metadata edits (Brief flag, Comments, etc.) save themselves immediately and are never at risk on close, so they don't enter either dialog.</p>
+<h2 id="the-unsaved-changes-indicator">The unsaved-changes indicator</h2>
+<p>When a tab has changes that have not yet been written to its dictionary file, a dot (●) appears before the tab name. This signals only that the JSON dictionary file is out of sync with the in-memory entries — metadata changes do not produce the dot because they save immediately on edit.</p>
+<h1 id="4-the-dictionary-table">4. The Dictionary Table</h1>
+<p>Each tab shows its dictionary as a table. The columns are:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Column</td>
+<td>Meaning</td>
+</tr>
+<tr>
+<td>Steno</td>
+<td>The stroke or stroke sequence. Multi-stroke entries use "/" as a separator (for example AL/PHOERPB).</td>
+</tr>
+<tr>
+<td>Translation</td>
+<td>The text the stroke produces.</td>
+</tr>
+<tr>
+<td>S</td>
+<td>Stroke count: number of strokes in the entry. Useful for finding multi-stroke entries that could be briefed.</td>
+</tr>
+<tr>
+<td>W</td>
+<td>Word count: number of whitespace-separated words in the translation. A long-translation entry combined with a short stroke is likely a brief.</td>
+</tr>
+<tr>
+<td>B</td>
+<td>Brief flag: shows ✓ if the entry has been marked as a brief in its metadata. The flag is set in the Add/Edit dialog.</td>
+</tr>
+<tr>
+<td>F</td>
+<td>Frequency score for the entry's translation, from an imported frequency list (Section 12). Optional — shown only when <em>Show frequency column</em> is ticked in the filter panel.</td>
+</tr>
+<tr>
+<td>Added</td>
+<td>Date the entry was first recorded by StenoLab (not necessarily the date the dictionary file was created).</td>
+</tr>
+<tr>
+<td>Modified</td>
+<td>Date the entry was last edited.</td>
+</tr>
+<tr>
+<td>Comments</td>
+<td>Free-text notes about the entry. Long comments are truncated in the table view; the full text is visible in the Edit dialog.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="sorting">Sorting</h2>
+<p>Click any column header to sort by it. Clicking the same header again reverses the sort direction. The currently sorted column shows an arrow: ▲ for ascending, ▼ for descending.</p>
+<p>Sorting is per-tab and is not persisted across sessions; each new launch starts sorted by Translation, ascending.</p>
+<h2 id="selection">Selection</h2>
+<p>Click a row to select it. Click-and-drag across rows (or Shift-click) selects a contiguous range. Right-click any row to open the context menu (covered in Section 5).</p>
+<h2 id="column-widths">Column widths</h2>
+<p>Drag the divider between two column headers to resize. New widths save automatically and apply to every dictionary tab on next launch.</p>
+<h2 id="row-colours">Row colours</h2>
+<p>The table uses subtle background tints to flag entry state at a glance:</p>
+<ul>
+<li>Bookmarked entries are tinted green.</li>
+<li>Conflicting entries (where two or more rows share the same steno) are tinted red.</li>
+<li>An entry that is both bookmarked and in conflict is tinted amber.</li>
+<li>During a Find &amp; Replace search, matching rows are highlighted in yellow.</li>
+</ul>
+<p>Tints adapt to dark and light mode automatically.</p>
+<h2 id="large-dictionaries">Large dictionaries</h2>
+<p>The whole dictionary is shown at once. There is no row cap and no pagination: however many entries match the current search and filters — a handful or all 100,000+ — every one is listed in a single, continuously scrollable table.</p>
+<p>This works because the table is <em>virtualised</em>: only the rows currently on screen are actually drawn, and more are rendered as you scroll. Opening a six-figure dictionary is near-instant and scrolling stays smooth, because the work never depends on the total number of rows.</p>
+<p>In practice you'll still reach a specific entry fastest by typing into the search bar (Section 6) rather than scrolling — but nothing stops you from scrolling the full list when you want to. The entry-count chip in the filter panel header always shows the current match count (for example, "1,234 of 101,455").</p>
+<h1 id="5-adding-editing-and-deleting-entries">5. Adding, Editing, and Deleting Entries</h1>
+<h2 id="adding">Adding</h2>
+<p>Edit → Add Entry, or Ctrl+N, or the + toolbar button. A modal dialog opens with empty Steno and Translation fields, an unchecked Brief checkbox, and an empty Comments box. Save commits the entry to the active tab; Cancel discards it. The Steno field is focused on open, so you can start typing immediately.</p>
+<h2 id="editing">Editing</h2>
+<p>Several routes open the Edit dialog for the selected row:</p>
+<ul>
+<li>Double-click the row.</li>
+<li>Press Enter or Ctrl+E with the row selected.</li>
+<li>Edit → Edit Entry.</li>
+<li>Right-click → Edit Entry.</li>
+<li>The ✎ toolbar button.</li>
+</ul>
+<p>The dialog is identical to Add Entry but pre-filled with the existing values. Saving writes the change to the active tab and stamps today's date into the entry's Modified field.</p>
+<h2 id="steno-validation">Steno validation</h2>
+<p>When you click Save in the Add or Edit dialog, the Steno field is checked against a basic correctness rule: characters must come from the steno alphabet (S T K P W H R A O * E U F R P B L G T S D Z, digits, and the modifier characters # and -), and within each stroke the keys must appear left-to-right in canonical order. Multi-stroke entries split on "/" and each stroke is checked individually.</p>
+<p>If validation fails, the Save is blocked, the Steno field gains a red border, and a message below the field explains the problem ("Invalid character 'x'", "Keys are out of order", and so on). The error clears as soon as you start editing the field again.</p>
+<p>Validation runs only at Save time, not as you type. Briefs are entered key-by-key, and validating mid-stroke would flicker errors while you're still typing.</p>
+<p>The Steno field auto-capitalises as you type. Steno is conventionally written in upper case, and forcing it removes the need to hold Shift or toggle Caps Lock for every entry.</p>
+<h2 id="deleting">Deleting</h2>
+<p>Select one or more rows, then either press Delete, choose Edit → Delete Selected, or right-click → Delete. A confirmation prompt appears; for a single row it shows the steno key, for multiple rows it shows the count.</p>
+<p>Deleted entries are removed from the in-memory dictionary immediately. Their metadata is also discarded. The dictionary file on disk is unchanged until the next save (or until the application closes).</p>
+<h2 id="cross-tab-transfer">Cross-tab transfer</h2>
+<p>Right-click a selection to access "Copy to →" and "Move to →" submenus listing every other open tab. Copying preserves the entries on the source tab; moving deletes them from the source after copying. Metadata travels with the entries in both cases.</p>
+<p>This is the main mechanism for mining other dictionaries: open the reference dictionary in one tab, your personal dictionary in another, select interesting entries in the reference, and copy them across.</p>
+<h2 id="brief-flag">Brief flag</h2>
+<p>The Brief checkbox in the Add/Edit dialog is purely advisory — a hand-set marker indicating you consider this entry a brief rather than a phonetic outline. The flag drives the B column in the table and the "Is brief" filter (Section 7); nothing in the application infers it automatically from stroke length.</p>
+<h2 id="comments">Comments</h2>
+<p>The Comments field is a multi-line free-text box. Use it for whatever is useful: a memory hook for an awkward outline, the source dictionary an entry was extracted from, a note that an entry needs revisiting. The Has Comments filter (Section 7) lists every entry whose Comments field is non-empty, which is a quick way to find unfinished work.</p>
+<h1 id="6-searching">6. Searching</h1>
+<p>StenoLab searches along two independent axes — Steno and Text — that can be combined freely. This is the headline feature for dictionary mining: it lets you ask questions like "show me every entry whose steno ends in -FT and whose translation ends in 'st'", which a single-axis search cannot express.</p>
+<h2 id="the-search-panel">The search panel</h2>
+<p>Click the "▶ Search" header to expand the panel. The panel persists in whichever state — collapsed or expanded — it was last left in, across application restarts.</p>
+<p>When expanded, the panel has three rows:</p>
+<ul>
+<li>Text: a method dropdown, an entry field, and a "Match case" checkbox.</li>
+<li>Steno: a method dropdown, an entry field, and a "Whole strokes only" checkbox.</li>
+<li>Scope: a dropdown selector, plus a Clear button that empties both query fields.</li>
+</ul>
+<p>The Text axis sits above Steno because most searches start by thinking of an English word and recalling the outline second.</p>
+<h2 id="methods">Methods</h2>
+<p>Each axis offers three methods that determine how the query string is matched:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Method</td>
+<td>Behaviour</td>
+</tr>
+<tr>
+<td>Contains</td>
+<td>Match if the query string appears anywhere in the field.</td>
+</tr>
+<tr>
+<td>Begins With</td>
+<td>Match if the field starts with the query string.</td>
+</tr>
+<tr>
+<td>Ends With</td>
+<td>Match if the field ends with the query string.</td>
+</tr>
+</tbody>
+</table>
+<p>Steno matching is case-insensitive, and the Steno query field auto-capitalises as you type so you don't have to hold Shift or toggle Caps Lock. Text matching is case-insensitive by default; tick "Match case" on the Text row to require an exact case match. Useful when auditing capitalisation in a proper-noun dictionary, or distinguishing entries like "US" (the country) from "us" (the pronoun).</p>
+<h2 id="combining-the-two-axes">Combining the two axes</h2>
+<p>The two axes AND together. An entry is shown only if it matches the Steno axis (or the Steno query is empty) AND matches the Text axis (or the Text query is empty).</p>
+<p>Empty axes impose no constraint. With both fields empty, the panel is effectively inactive.</p>
+<p>Worked example: looking for short briefs ending in -st where the steno ends in -FT. Set Steno method to <em>Ends With</em>, Steno query to FT. Set Text method to <em>Ends With</em>, Text query to st. The result includes TEFT → "test" but excludes PR-FT → "proof".</p>
+<h2 id="whole-strokes-only">Whole strokes only</h2>
+<p>This checkbox changes the steno match algorithm. By default (unchecked), the steno value is treated as a single string and the chosen method matches against that string directly. With the checkbox ticked, the steno value is split into individual strokes on the "/" separator and the query is matched stroke-by-stroke.</p>
+<p>Example: searching for steno ending in AL. Without whole-strokes mode, both TPORPL/AL and TPAL match (the latter because its single stroke ends in the substring "AL"). With whole-strokes mode on, only TPORPL/AL matches — its final stroke is exactly AL, whereas TPAL contains "AL" only as part of a larger stroke.</p>
+<p>Whole-strokes mode applies to all three methods (Contains, Begins With, Ends With) and only affects the Steno axis. The Text axis is unaffected.</p>
+<h2 id="scope">Scope</h2>
+<p>The Scope dropdown determines which dictionaries are searched. "Current Dictionary" — the default — searches only the active tab. "All Dictionaries" searches every open tab simultaneously, with each tab's filter panel reflecting the matches found in that tab. This is useful when looking for an entry without remembering which dictionary it lives in, or when comparing how the same word is outlined across several reference dictionaries.</p>
+<h2 id="type-ahead-filtering">Type-ahead filtering</h2>
+<p>StenoLab filters as you type, with no Search button to press. Each keystroke updates the visible rows immediately.</p>
+<p>More unusually: keystrokes received while the application has focus but no input field is selected are routed automatically to the Text search field, expanding the search panel first if it is currently collapsed. So the workflow "open the program, type the word you're looking for, see results" works without any prior clicks. The character is treated as Begins-With text, the most common search reflex.</p>
+<p>Type-ahead routing skips when an input field is already focused (so typing in the Find &amp; Replace dialog or an Edit dialog works normally), when modifier keys are held (Ctrl, Alt), and on navigation keys (arrows, Page Up, Home), function keys (F1–F12), and editing keys (Backspace, Delete, Enter, Escape).</p>
+<p>Steno-axis searches are not reachable through type-ahead. To search by stroke, click into the Steno field first; the program assumes that someone already thinking in steno will know to do this.</p>
+<h2 id="the-active-search-hint">The active-search hint</h2>
+<p>When the search panel is collapsed and a search is active, the panel header shows a brief summary of what is currently being filtered, for example:</p>
+<p>▶ Search active: text: "the"</p>
+<p>If the active search yields zero matches, the suffix "— no matches" is appended:</p>
+<p>▶ Search active: steno: "FT", text: "xyz" — no matches</p>
+<p>This indicator means a collapsed panel is never silently filtering — there is always a visible cue that some constraint is in force.</p>
+<h2 id="clearing-the-search">Clearing the search</h2>
+<p>The Clear button on the bottom row of the search panel empties both query fields in one click, leaving the method dropdowns and Whole-strokes checkbox untouched.</p>
+<h1 id="7-filtering">7. Filtering</h1>
+<p>The filter panel sits just below the tab strip on every dictionary tab. It is collapsed by default; click the "▶ Filters" header to expand it.</p>
+<p>Filters are independent of search and AND together with the search axes. An entry is shown only if it matches both the search criteria and every active filter checkbox.</p>
+<p>All filters are checkboxes. With none ticked, no filtering is applied and the full dictionary is shown (subject to any active search). Multiple filters combine with AND — for example, ticking both "Is brief" and "Has comments" shows only entries that are flagged as briefs and have non-empty comments.</p>
+<h2 id="entry-state-filters">Entry-state filters</h2>
+<p>The first row of filters reflects metadata or per-entry state.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Filter</td>
+<td>Matches entries where...</td>
+</tr>
+<tr>
+<td>Has comments</td>
+<td>the Comments field contains any non-whitespace text.</td>
+</tr>
+<tr>
+<td>Is brief</td>
+<td>the Brief flag has been set in the Edit dialog.</td>
+</tr>
+<tr>
+<td>Bookmarked</td>
+<td>the entry is currently bookmarked in this session (see Section 9).</td>
+</tr>
+<tr>
+<td>Conflicts</td>
+<td>the steno key is shared with at least one other entry in the same dictionary.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="content-predicate-filters">Content-predicate filters</h2>
+<p>The second row of filters tests the content of the Translation field.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Filter</td>
+<td>Matches entries where the translation...</td>
+</tr>
+<tr>
+<td>Capitalised</td>
+<td>begins with an uppercase letter. Useful for auditing proper-noun dictionaries or checking that capitalisation is consistent.</td>
+</tr>
+<tr>
+<td>Numbers (0–9)</td>
+<td>contains at least one digit. Picks up things like "$1.50" and "23-skidoo".</td>
+</tr>
+<tr>
+<td>Numbers (written)</td>
+<td>contains a word that names a number — "one", "twenty", "thousand", and so on. Helpful for sanity-checking number spelling entries.</td>
+</tr>
+<tr>
+<td>Punctuation</td>
+<td>contains any non-alphanumeric punctuation character. Punctuation entries are a common source of small dictionary bugs that go unnoticed for a long time.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="frequency-filters">Frequency filters</h2>
+<p>A third row of filters uses the frequency score imported via <strong>Tools → Import Frequency List</strong> (Section 12). Entries that have never been matched to a frequency list have a score of 0.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Filter</td>
+<td>Matches entries where the translation...</td>
+</tr>
+<tr>
+<td>Has frequency</td>
+<td>has a non-zero frequency score.</td>
+</tr>
+<tr>
+<td>Top N by frequency</td>
+<td>is among the N highest-scoring entries in the dictionary. Type N in the adjacent box (default 500). Useful for concentrating on the most common words first — the ones where a good brief pays off most.</td>
+</tr>
+</tbody>
+</table>
+<p>The same row of the panel also carries two <strong>view toggles</strong> rather than filters — <em>Focus mode</em> and <em>Show frequency column</em> — both described in Section 10.</p>
+<h2 id="what-conflict-means">What "conflict" means</h2>
+<p>"Conflict" here has a specific meaning: a steno key that appears more than once in the same dictionary. It does not flag entries whose translation is duplicated under different stenos, and it does not look across dictionaries.</p>
+<p>Conflict detection runs automatically when a dictionary is opened, when entries are added, edited, or deleted, and after Replace All. Conflicting rows show the red row tint described in Section 4.</p>
+<p>Within a Plover JSON file, duplicate keys are unusual — Plover itself deduplicates them on read, keeping the last value. StenoLab preserves the duplicates so they can be inspected and resolved. If a dictionary is opened and the Conflicts filter shows entries, those are silent collisions in the source file that Plover has been ignoring all along.</p>
+<h2 id="conflict-warnings-on-edit">Conflict warnings on edit</h2>
+<p>When adding or editing an entry creates a new conflict — that is, the steno key being saved now collides with an existing entry — a non-blocking warning banner appears at the bottom of the tab naming the conflicting steno, and the Conflicts filter is automatically turned on so the conflicting rows are immediately visible.</p>
+<p>The banner is non-blocking on purpose. Bulk operations like copying many entries between dictionaries can legitimately create dozens of conflicts in a row, and a modal dialog per conflict would be intolerable. The auto-applied filter does the work of pointing you at the conflicts so you can resolve them when convenient. Click the × on the banner to dismiss it.</p>
+<h2 id="combining-filters-and-search">Combining filters and search</h2>
+<p>Search and filters are independent and stack with AND. The visible rows are the intersection of: (a) entries matching the Steno query or no Steno constraint; (b) entries matching the Text query or no Text constraint; and (c) entries matching every ticked filter. The entry count in the filter panel header reflects the intersection.</p>
+<h1 id="8-find-replace">8. Find &amp; Replace</h1>
+<p>Find &amp; Replace is a separate dialog reached via Ctrl+F, Edit → Find &amp; Replace, or the ⌕ toolbar button. It is non-modal — the main window stays usable behind it — and it always operates on the currently active tab, so switching tabs while the dialog is open naturally retargets the search.</p>
+<p>Where the Search panel filters the visible rows down, Find &amp; Replace navigates and modifies. The two are complementary: search narrows, Find &amp; Replace acts.</p>
+<h2 id="dialog-layout">Dialog layout</h2>
+<ul>
+<li>Find: the text to search for.</li>
+<li>Replace: the text to substitute in.</li>
+<li>In: which field to search — Translation, Steno, or Both.</li>
+<li>Match case: when ticked, capitalisation must match exactly.</li>
+<li>Prev / Next: navigate between matches.</li>
+<li>Replace: replace in the currently selected match, then advance.</li>
+<li>Replace All: replace every match across the entire dictionary in one operation. Because Replace All cannot be undone, a confirmation dialog shows the match count before proceeding and recommends saving first.</li>
+<li>Close: dismiss the dialog and clear find highlighting.</li>
+</ul>
+<h2 id="highlighting">Highlighting</h2>
+<p>As the Find query is typed, all matching rows in the active tab are highlighted in yellow. The status line below the input fields shows the match count ("15 matches", or "No matches"), and once you navigate, it updates to position ("3 of 15 matches").</p>
+<h2 id="find-vs-replace-all-scope">Find vs. Replace All scope</h2>
+<p>There is one important asymmetry to be aware of:</p>
+<ul>
+<li>Find — and the Prev / Next / Replace buttons — operates only on the currently visible (filtered) rows. If a search or filter is hiding rows in the tab, Find won't see them.</li>
+<li>Replace All operates on every entry in the dictionary, regardless of search or filter state.</li>
+</ul>
+<p>This is intentional: Find should match what’s on screen, and Replace All should be a sweeping operation that won’t leave instances behind in hidden rows. Be deliberate when using Replace All — it really does mean every entry, and it cannot be undone. The automatic pre-save backup (Section 13) provides a recovery path if you need to roll back.</p>
+<h2 id="case-sensitivity">Case sensitivity</h2>
+<p>Match case is off by default, so a search for "the" matches "The" and "THE". Tick the checkbox to require an exact case match. The match count updates immediately when the checkbox state changes.</p>
+<h2 id="what-gets-stamped">What gets stamped</h2>
+<p>Replace and Replace All stamp today's date into the Modified field of every entry they change. Adding metadata in this way ensures audit trails remain accurate even when changes come through Find &amp; Replace rather than the Edit dialog.</p>
+<h2 id="renaming-a-steno-key">Renaming a steno key</h2>
+<p>When the In field is set to Steno or Both, Find &amp; Replace can rewrite steno keys. This is more than a string change: bookmark state, metadata, and conflict membership are all migrated from the old key to the new key. The dictionary file is updated on the next save.</p>
+<h2 id="closing">Closing</h2>
+<p>Pressing Escape, clicking Close, or closing the dialog window clears the find highlighting from the table. The dialog otherwise stays open as long as you want, ready for the next find.</p>
+<h1 id="9-bookmarks">9. Bookmarks</h1>
+<p>Bookmarks are visual flags that pin individual entries for attention during a working session. They have no effect on the dictionary file and do not influence search or sort order; they exist purely to make an entry easy to find again and easy to filter for.</p>
+<h2 id="toggling">Toggling</h2>
+<p>Three routes toggle the bookmark state of the selected rows:</p>
+<ul>
+<li>Edit → Toggle Bookmark, or Ctrl+B.</li>
+<li>Right-click → Toggle Bookmark.</li>
+<li>The ★ toolbar button.</li>
+</ul>
+<p>All three operate on the current selection, and all three behave consistently: if every selected row is currently bookmarked, the action removes bookmarks from all of them; otherwise, every selected row gets bookmarked. This means selecting a mix of bookmarked and unbookmarked rows and triggering the action makes them uniformly bookmarked, which is usually what you want.</p>
+<h2 id="visual-indicator">Visual indicator</h2>
+<p>Bookmarked rows are tinted green in the dictionary table. The tint adapts to dark and light mode automatically.</p>
+<p>An entry that is both bookmarked and in conflict (a duplicate steno key) is tinted amber, signalling that two states overlap.</p>
+<h2 id="the-bookmarked-filter">The Bookmarked filter</h2>
+<p>Tick the Bookmarked checkbox in the filter panel to show only bookmarked entries. This is the most common use of bookmarks: flag interesting rows while scrolling, then filter down to review them.</p>
+<h2 id="session-only">Session-only</h2>
+<p>Bookmarks are not persisted between sessions. They are a working-memory aid, not a long-term tag. Closing the application or closing the dictionary tab clears them. For permanent tagging, use the Comments field on individual entries.</p>
+<h1 id="10-view-options">10. View Options</h1>
+<h2 id="dark-and-light-mode">Dark and light mode</h2>
+<p>View → Dark Mode is a checkbox toggle. The application defaults to dark mode on first launch. The choice persists across sessions.</p>
+<p>Dark mode also requests a dark title bar from Windows, which most modern Windows 10 and 11 installations honour automatically. On platforms where the title bar can't be themed (older Windows builds, some Linux window managers), the title bar will remain in the system default appearance even when dark mode is active inside the application.</p>
+<p>Switching modes is instant — there is no need to restart. Open dialogs, including Find &amp; Replace, repaint to match the new mode.</p>
+<h2 id="focus-mode">Focus mode</h2>
+<p>The <em>Focus mode</em> checkbox in the filter panel switches the table to a stripped-down set of columns — Steno, Translation, and the Brief flag only (plus the F column if it is shown). It is meant for distraction-free daily editing, where the metadata columns (dates, comments, counts) are just noise. Focus mode is per-session and always starts off.</p>
+<h2 id="show-frequency-column">Show frequency column</h2>
+<p>The <em>Show frequency column</em> checkbox adds the optional <strong>F</strong> column to the table (Section 4), showing each entry's imported frequency score. The choice is shared across all tabs and persists across sessions.</p>
+<h2 id="panel-collapse-states">Panel collapse states</h2>
+<p>Both the Search panel and each tab's Filter panel can be collapsed by clicking their header row.</p>
+<ul>
+<li>The Search panel's collapse state is application-wide and persists across sessions.</li>
+<li>The Filter panel's collapse state is per-tab and resets each time a tab is opened.</li>
+</ul>
+<p>When a panel is collapsed but is currently filtering, its header shows a hint summarising what is active (see Section 6 for the Search panel; the Filter panel shows an entry count).</p>
+<h2 id="column-widths_1">Column widths</h2>
+<p>Column widths persist across sessions and are shared across all dictionary tabs. Adjust them on whichever tab is convenient; the new widths apply everywhere on the next launch.</p>
+<h2 id="open-tabs">Open tabs</h2>
+<p>The set of open dictionary tabs is remembered between sessions. Whichever dictionaries are open when the application closes will reopen automatically on the next launch, in the same order, with the tab that was active last time re-selected. The <em>Show frequency column</em> choice is also remembered.</p>
+<h2 id="what-does-not-persist">What does not persist</h2>
+<p>These elements deliberately reset between sessions:</p>
+<ul>
+<li>The current sort column and direction (always starts as Translation, ascending).</li>
+<li>Filter checkbox states (always start unticked).</li>
+<li>Focus mode (always starts off).</li>
+<li>Search field contents (always start empty).</li>
+<li>Bookmarks (see Section 9).</li>
+</ul>
+<h1 id="11-keyboard-shortcuts">11. Keyboard Shortcuts</h1>
+<p>All keyboard shortcuts available throughout the application:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Shortcut</td>
+<td>Action</td>
+<td>Where it works</td>
+</tr>
+<tr>
+<td>Ctrl+O</td>
+<td>Open Dictionary</td>
+<td>Anywhere</td>
+</tr>
+<tr>
+<td>Ctrl+S</td>
+<td>Save active dictionary</td>
+<td>Anywhere</td>
+</tr>
+<tr>
+<td>Ctrl+N</td>
+<td>Add Entry</td>
+<td>Anywhere</td>
+</tr>
+<tr>
+<td>Ctrl+E</td>
+<td>Edit selected entry</td>
+<td>Anywhere</td>
+</tr>
+<tr>
+<td>Ctrl+B</td>
+<td>Toggle bookmark on selection</td>
+<td>Anywhere</td>
+</tr>
+<tr>
+<td>Ctrl+F</td>
+<td>Open Find &amp; Replace</td>
+<td>Anywhere</td>
+</tr>
+<tr>
+<td>Delete</td>
+<td>Delete selected entries</td>
+<td>In the dictionary table</td>
+</tr>
+<tr>
+<td>Enter</td>
+<td>Edit selected entry</td>
+<td>In the dictionary table</td>
+</tr>
+<tr>
+<td>Double-click</td>
+<td>Edit clicked entry</td>
+<td>In the dictionary table</td>
+</tr>
+<tr>
+<td>Right-click</td>
+<td>Open context menu</td>
+<td>In the dictionary table</td>
+</tr>
+<tr>
+<td>Enter</td>
+<td>Find Next</td>
+<td>In the Find &amp; Replace dialog</td>
+</tr>
+<tr>
+<td>Shift+Enter</td>
+<td>Find Previous</td>
+<td>In the Find &amp; Replace dialog</td>
+</tr>
+<tr>
+<td>Escape</td>
+<td>Close Find &amp; Replace</td>
+<td>In the Find &amp; Replace dialog</td>
+</tr>
+<tr>
+<td>Ctrl+Z</td>
+<td>Undo</td>
+<td>Anywhere</td>
+</tr>
+<tr>
+<td>Ctrl+Y / Ctrl+Shift+Z</td>
+<td>Redo</td>
+<td>Anywhere</td>
+</tr>
+<tr>
+<td>Any letter / digit</td>
+<td>Begin Text search (type-ahead)</td>
+<td>When no input field is focused</td>
+</tr>
+</tbody>
+</table>
+<h1 id="12-files-and-storage-appendix">12. Files and Storage (Appendix)</h1>
+<p>StenoLab stores all of its data on the local machine. Nothing is uploaded or synchronised. Three categories of file are involved:</p>
+<h2 id="dictionary-files">Dictionary files</h2>
+<p>These are the JSON dictionary files you open with File → Open Dictionary. StenoLab does not move or copy them; it reads from and writes back to whatever path you opened. The format is a flat JSON object mapping steno keys to translation strings:</p>
+<p>{<br />
+"KAT": "cat",<br />
+"TKOG": "dog",<br />
+"TPHEUS/SOUR": "Missouri"<br />
+}</p>
+<p>This is the same format Plover uses, so dictionaries can be opened in either application. Files are written with UTF-8 encoding and two-space indentation.</p>
+<p>Duplicate steno keys in the file are preserved on load (Section 7) but cannot survive a save without manual resolution: when StenoLab writes a dictionary back, the JSON object format only allows one value per key. Resolve conflicts before saving, or the second duplicate will be silently lost.</p>
+<h2 id="metadata-sidecar-files">Metadata sidecar files</h2>
+<p>Per-entry metadata (creation date, modification date, brief flag, comments, frequency) is stored alongside the dictionary in a separate file. Sidecar files live in StenoLab's data folder — a <strong>StenoLab Data</strong> folder inside your Documents folder (OneDrive-synced if you use OneDrive) — not next to the dictionary, so the dictionary file remains pure Plover JSON.</p>
+<p>Location:</p>
+<p>Documents\StenoLab Data\metadata\</p>
+<p>Each metadata file is named after its dictionary. For example, a dictionary at C:\dicts\main.json has a metadata file at Documents\StenoLab Data\metadata\main.json. The format is a JSON object keyed by steno:</p>
+<p>{<br />
+"KAT": {<br />
+"date_added": "2024-08-01",<br />
+"modified": "2024-09-12",<br />
+"brief": false,<br />
+"comments": "extracted from Lapwing",<br />
+"bookmarked": false,<br />
+"frequency": 0<br />
+}<br />
+}</p>
+<p>The frequency field holds a usage-frequency score for the entry's translation. It is populated by <strong>Tools → Import Frequency List</strong> and is read by the <em>Has frequency</em> and <em>Top N by frequency</em> filters (Section 7) and the optional <strong>F</strong> column (Section 4). A score of 0 means no frequency data has been matched to that entry. The bookmarked field is unused in practice (bookmarks are session-only, see Section 9) but the field is retained in the schema for future flexibility.</p>
+<p>If a metadata file is missing or unreadable, StenoLab builds a fresh one in memory using today's date for both Added and Modified fields. There is no harm in deleting metadata files; it just means history information for that dictionary is lost.</p>
+<h2 id="backup-files">Backup files</h2>
+<p>StenoLab automatically backs up dictionaries so a previous version is always recoverable. Backups are stored as timestamped copies of the dictionary JSON together with its metadata sidecar.</p>
+<p>Location:</p>
+<p>Documents\StenoLab Data\backups\</p>
+<p>Filenames combine the dictionary name and a millisecond-precision timestamp, for example:</p>
+<p>main_2026-04-30_14-32-08-241.json<br />
+main_2026-04-30_14-32-08-241.metadata.json</p>
+<p>Backups are created at two specific moments:</p>
+<ul>
+<li>When a dictionary is opened in a session, capturing the file as it stood at the start of the working session. This snapshot is taken once per dictionary per session — reopening the same file later in the same session does not produce another open-time backup.</li>
+<li>Before every save, capturing the on-disk file as it was just before being overwritten. So even within a session you can roll back to the version immediately preceding any save.</li>
+</ul>
+<p>Pruning runs after each backup and keeps only the twenty most recent snapshots per dictionary. Older backups are removed automatically. If you need to keep a particular backup beyond that limit, copy it out of the backup folder; StenoLab never touches files it doesn't recognise.</p>
+<p>Backup creation runs silently in the background. The exception is a failure: if StenoLab cannot write a backup before saving (most commonly a full disk or permission problem), it warns you and asks whether to save anyway. Saving without a backup is allowed but deliberately makes you confirm, since the safety net would be absent for that save only.</p>
+<h2 id="restoring-from-a-backup">Restoring from a backup</h2>
+<p>Tools → Restore Backup opens a dialog listing every available backup for the active tab's dictionary, newest first. Each row shows when the backup was made, how many entries it contained, and whether a matching metadata sidecar was captured. Select one and click Restore Selected (or double-click) to replace the current file.</p>
+<p>Restoration steps StenoLab performs in order:</p>
+<ul>
+<li>Warns if the active tab has unsaved JSON changes that would be lost.</li>
+<li>Asks for confirmation, showing the timestamp of the chosen backup.</li>
+<li>Backs up the current state immediately before replacing it. This is an important property: a restore is itself reversible by restoring the snapshot it took on the way in.</li>
+<li>Replaces the dictionary file (and the metadata sidecar, if the backup includes one) with the chosen backup's contents.</li>
+<li>Reloads the active tab from the restored file so the table reflects the new state immediately.</li>
+</ul>
+<p>If the dictionary has no backups yet, the dialog opens but reports the empty state rather than disabling the menu item.</p>
+<h2 id="settings-file">Settings file</h2>
+<p>User preferences and session state live in a single JSON file:</p>
+<p>Documents\StenoLab Data\settings.json</p>
+<p>Keys currently stored:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Key</td>
+<td>Purpose</td>
+</tr>
+<tr>
+<td>theme</td>
+<td>"dark" or "light" — see Section 10.</td>
+</tr>
+<tr>
+<td>search_collapsed</td>
+<td>Whether the Search panel was collapsed at the time of the last session change.</td>
+</tr>
+<tr>
+<td>column_widths</td>
+<td>Map of column name to pixel width. Shared across all tabs.</td>
+</tr>
+<tr>
+<td>open_tabs</td>
+<td>List of dictionary file paths that were open when the application last closed. Used to reopen them on next launch.</td>
+</tr>
+<tr>
+<td>active_tab</td>
+<td>Path of the dictionary that was the active tab when the application last closed, so it is re-selected on next launch.</td>
+</tr>
+<tr>
+<td>show_freq_column</td>
+<td>Whether the optional <strong>F</strong> (frequency) column is shown. Shared across all tabs.</td>
+</tr>
+<tr>
+<td>ignored_frequency_words</td>
+<td>List of words to skip when reviewing missing frequency matches (see Tools below).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="the-tools-menu">The Tools menu</h2>
+<p>The Tools menu groups the data-folder shortcuts, the restore feature, and the frequency tools:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Command</td>
+<td>What it does</td>
+</tr>
+<tr>
+<td>Restore Backup...</td>
+<td>Opens the restore dialog described above. If no dictionary tab is active, the command shows a brief message asking you to open one first.</td>
+</tr>
+<tr>
+<td>Open Backup Folder</td>
+<td>Opens the backup directory in the system file browser. Useful for inspecting backups manually, copying one out before it gets pruned, or clearing space.</td>
+</tr>
+<tr>
+<td>Open Metadata Folder</td>
+<td>Opens the metadata directory in the system file browser. Useful for inspecting a sidecar manually, removing the metadata for a dictionary you no longer use, or transferring metadata between machines.</td>
+</tr>
+<tr>
+<td>Import Frequency List...</td>
+<td>Loads a word-frequency list (space/tab-delimited or CSV — rows of a word with a usage count) and writes a frequency score into the metadata of each entry whose translation is a single plain word that matches. This populates the <strong>F</strong> column and the <em>Has frequency</em> / <em>Top N by frequency</em> filters.</td>
+</tr>
+<tr>
+<td>Review Missing Frequency Words...</td>
+<td>Loads a frequency list and lists the most common words from it that have <strong>no</strong> entry in the active dictionary — a worklist of common words still worth an outline. Words you decide to skip are remembered via Manage Ignored Frequency Words.</td>
+</tr>
+<tr>
+<td>Manage Ignored Frequency Words...</td>
+<td>Edits the list of words excluded from the missing-frequency review.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="manual-backups">Manual backups</h2>
+<p>The automatic backup system handles routine recovery, but for long-term archiving — disaster recovery, transferring to a new machine, or keeping snapshots beyond the rolling backup window — back up everything by copying:</p>
+<ul>
+<li>Each dictionary JSON file (wherever you keep them).</li>
+<li>The Documents\StenoLab Data folder in its entirety.</li>
+</ul>
+<p>Restoring is the reverse: place the dictionary files where they were before, restore the StenoLab Data folder, and reopen the application. All metadata, settings, automatic backups, and previously open tabs will be present.</p>
+<h2 id="sharing-dictionaries">Sharing dictionaries</h2>
+<p>To share a dictionary with another user, just send the JSON file. Metadata is local to your machine and won't travel with it; the recipient will see the entries with empty Added / Modified dates and an unset Brief flag, building up their own metadata as they use the dictionary.</p>
+<p>If you want the metadata to come with the dictionary, send the matching file from Documents\StenoLab Data\metadata\ as well, and the recipient can drop it into the same location on their machine.</p>
+</div>
+</body>
+</html>

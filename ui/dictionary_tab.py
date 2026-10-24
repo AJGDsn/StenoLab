@@ -21,14 +21,6 @@ MAX_COMMENT_CHARS  = 40
 ANIMATION_DURATION = 180   # ms
 ANIMATION_STEPS    = 12
 
-# Historically this capped how many rows were inserted into the ttk.Treeview,
-# which could not handle more than a few hundred without freezing.  The table
-# is now a virtualized tksheet.Sheet that draws only the on-screen rows, so the
-# entire filtered dictionary is shown at once and no cap is applied.  The
-# constant is retained (unused for capping) because tests and settings still
-# reference it.
-MAX_DISPLAY_ROWS = 500
-
 WRITTEN_NUMBERS = frozenset({
     "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
     "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",

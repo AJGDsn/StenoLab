@@ -53,19 +53,6 @@ class StenoApp(tk.Tk):
         # opening view, same philosophy as the Filter panel.
         self._search_collapsed = settings.get("search_collapsed", True)
 
-        # Display row cap.  Default 500.  Hidden setting reachable via
-        # Tools → Set Display Limit; the module-level constant is mutated
-        # so all places that read it (refresh tree, hint label) pick up
-        # the new value on the next filter pass.
-        from ui import dictionary_tab as _dt_module
-        cap = settings.get("max_display_rows", _dt_module.MAX_DISPLAY_ROWS)
-        try:
-            cap = int(cap)
-            if cap >= 1:
-                _dt_module.MAX_DISPLAY_ROWS = cap
-        except (TypeError, ValueError):
-            pass
-
         self.tabs = {}
         self._find_replace_dlg = None   # singleton
         self._restoring_tabs = False
@@ -215,10 +202,6 @@ class StenoApp(tk.Tk):
             label="Manage Ignored Frequency Words...",
             command=self._manage_ignored_frequency_words,
         )
-        tools_menu.add_command(
-            label="Set Display Limit...",
-            command=self._set_display_limit,
-        )
         menubar.add_cascade(label="Tools", menu=tools_menu)
 
         # ── View ──────────────────────────────────────────────────
@@ -229,6 +212,14 @@ class StenoApp(tk.Tk):
             command=self._toggle_theme,
         )
         menubar.add_cascade(label="View", menu=view_menu)
+
+        # ── Help ──────────────────────────────────────────────────
+        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(
+            label="User Manual",
+            command=self._open_user_manual,
+        )
+        menubar.add_cascade(label="Help", menu=help_menu)
 
         self.config(menu=menubar)
 
@@ -1258,36 +1249,21 @@ class StenoApp(tk.Tk):
             pass
 
     # ------------------------------------------------------------
-    # Tools → Set Display Limit
+    # Help → User Manual
     # ------------------------------------------------------------
-    def _set_display_limit(self):
-        """
-        Open the dialog, persist the new value, push it into the module
-        constant, and re-render every open tab so the change is visible
-        immediately.
-        """
-        from ui.display_limit_dialog import ask_display_limit
-        from ui import dictionary_tab as _dt_module
-
-        new_value = ask_display_limit(self, _dt_module.MAX_DISPLAY_ROWS)
-        if new_value is None:
-            return
-
-        _dt_module.MAX_DISPLAY_ROWS = new_value
-
-        settings = load_settings()
-        settings["max_display_rows"] = new_value
-        save_settings(settings)
-
-        # Re-render every open tab so the new cap takes immediate effect.
-        # Inactive tabs aren't visible right now but will render correctly
-        # on tab activation; rebuilding them now is cheap relative to the
-        # work the user just did to think about this setting.
-        for tab in self.tabs.values():
-            try:
-                tab._apply_filters()
-            except Exception:
-                pass
+    def _open_user_manual(self):
+        """Open the bundled HTML user manual in the default web browser."""
+        import webbrowser
+        from pathlib import Path
+        manual = Path(__file__).resolve().parent / "docs" / "user_manual.html"
+        if manual.exists():
+            webbrowser.open(manual.as_uri())
+        else:
+            messagebox.showinfo(
+                "User Manual",
+                "The user manual could not be found. It should be installed "
+                "at:\n\n" + str(manual),
+            )
 
     # ------------------------------------------------------------
     # Tools → Restore Backup
