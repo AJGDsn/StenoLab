@@ -705,7 +705,14 @@ If a metadata file is missing or unreadable, StenoLab builds a fresh one in memo
 
 A tool that builds a dictionary can deliver metadata with it, in the same format, as a file named after the dictionary with `.stenolab-meta.json` at the end, in the same folder. For example, `Ian-rationalised.json` and `Ian-rationalised.stenolab-meta.json`.
 
-When you open the dictionary, StenoLab merges that file into its own metadata if it has none for the dictionary yet, or if the delivered file is newer. So a rebuilt delivery comes through, but opening the dictionary again doesn't undo your own changes. The delivered values (comments, brief flags and so on) take precedence, except blank dates, which never replace dates StenoLab already has. Open the dictionary itself, not the `.stenolab-meta.json` file; StenoLab explains if you pick that one by mistake.
+When you open the dictionary, StenoLab merges that file into its own metadata. It keeps a copy of each delivery it merges, so when a rebuilt delivery arrives it applies only what the rebuild actually changed:
+
+- A comment, brief flag or other value you haven't changed in StenoLab takes the delivered value.
+- A value you have changed stays as you left it, unless the rebuild changed it too.
+- If you and the rebuild both changed the same comment, both are kept: the delivered text is added after yours, starting with **[Delivered]**, and the entry is bookmarked. StenoLab tells you how many there are; tick the Bookmarked filter to find and tidy them.
+- Blank delivered dates never replace dates StenoLab already has.
+
+Opening the dictionary again with the same delivery changes nothing. The open-time backup is taken before the merge, so Tools → Restore Backup can undo it. Open the dictionary itself, not the `.stenolab-meta.json` file; StenoLab explains if you pick that one by mistake.
 
 ## Backup files
 

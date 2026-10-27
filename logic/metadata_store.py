@@ -118,41 +118,118 @@ def sidecar_path_for(dictionary_path: str) -> str:
     return os.path.splitext(dictionary_path)[0] + SIDECAR_SUFFIX
 
 
-def import_sidecar_metadata(dictionary_path: str) -> bool:
+# Marks a delivered comment that clashed with one edited in StenoLab; the
+# user searches comments for it to resolve them.
+DELIVERED_COMMENT_MARK = "[Delivered]"
+
+
+def _delivered_file_for(dictionary_path: str) -> str:
+    """StenoLab's copy of the delivery it last imported for a dictionary."""
+    return os.path.splitext(_metadata_file_for(dictionary_path))[0] + ".delivered.json"
+
+
+def _file_stamp(path: str) -> list:
+    stat = os.stat(path)
+    return [stat.st_size, stat.st_mtime_ns]
+
+
+def _read_json_object(path: str) -> dict | None:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _write_delivered(dictionary_path: str, stamp: list, delivered: dict) -> None:
+    _ensure_dirs()
+    atomic_write_text(
+        _delivered_file_for(dictionary_path),
+        json.dumps({"stamp": stamp, "entries": delivered},
+                   ensure_ascii=False, separators=(",", ":")),
+    )
+
+
+def _merge_field(field: str, base, delivered, current):
+    """
+    Three-way merge of one field: base is the previous delivery's value,
+    current is StenoLab's.  Returns the merged value and whether the two
+    sides clashed.
+    """
+    default = _OMIT_WHEN_DEFAULT.get(field, "")
+    if field in ("date_added", "modified") and not delivered:
+        return current, False          # blank dates never wipe stored ones
+    if delivered == base or delivered == current:
+        return current, False          # the delivery didn't change it
+    if current == base or current in (None, default):
+        return delivered, False        # the user didn't change it
+    if field == "comments":
+        if delivered and delivered not in current:
+            return f"{current}\n{DELIVERED_COMMENT_MARK} {delivered}", True
+        return current, False
+    return current, True               # other fields: the user's value stays
+
+
+def import_sidecar_metadata(dictionary_path: str) -> int | None:
     """
     Merge a delivered metadata file into StenoLab's own store.
 
-    Runs when the file is newer than the stored metadata (or there is none
-    yet), so a rebuilt delivery comes through but opening the dictionary
-    again doesn't redo it.  The delivered values win, except blank dates,
-    which never wipe stored ones.  Returns True if anything was imported.
+    StenoLab keeps a copy of each delivery it imports.  When a different
+    delivery turns up, only the fields that changed since that copy are
+    applied, so comments and flags edited in StenoLab survive a rebuild.
+    Where both sides changed a comment, the delivered text is added after
+    the user's, marked with DELIVERED_COMMENT_MARK, and the entry is
+    bookmarked.  Blank delivered dates never wipe stored ones.
+
+    Returns None when nothing was imported, otherwise the number of
+    comments that clashed.
     """
     sidecar = sidecar_path_for(dictionary_path)
     if not os.path.isfile(sidecar):
-        return False
-    stored = _metadata_file_for(dictionary_path)
-    if os.path.exists(stored) and os.path.getmtime(stored) >= os.path.getmtime(sidecar):
-        return False
-    try:
-        with open(sidecar, "r", encoding="utf-8") as f:
-            delivered = json.load(f)
-    except (OSError, ValueError):
-        return False
-    if not isinstance(delivered, dict):
-        return False
+        return None
+    stamp = _file_stamp(sidecar)
+    previous = _read_json_object(_delivered_file_for(dictionary_path))
+    if previous is not None and previous.get("stamp") == stamp:
+        return None
+    delivered = _read_json_object(sidecar)
+    if delivered is None:
+        return None
 
+    stored = _metadata_file_for(dictionary_path)
+    if previous is None and os.path.exists(stored) and os.path.getmtime(stored) >= os.path.getmtime(sidecar):
+        # Imported before StenoLab kept a copy of deliveries: this one is
+        # already in the store, so it becomes the base for the next merge.
+        _write_delivered(dictionary_path, stamp, delivered)
+        return None
+
+    base_entries = (previous or {}).get("entries")
+    base_entries = base_entries if isinstance(base_entries, dict) else {}
     merged = load_metadata(dictionary_path)
+    clashes = 0
     for steno, record in delivered.items():
         if not isinstance(record, dict):
             continue
-        current = dict(merged.get(steno) or {})
+        if not isinstance(merged.get(steno), dict):
+            merged[steno] = {field: value for field, value in record.items()
+                             if value or field not in ("date_added", "modified")}
+            continue
+        base = base_entries.get(steno)
+        base = base if isinstance(base, dict) else {}
+        current = dict(merged[steno])
+        comment_clash = False
         for field, value in record.items():
-            if field in ("date_added", "modified") and not value:
-                continue
-            current[field] = value
+            value, clashed = _merge_field(field, base.get(field), value, current.get(field))
+            comment_clash |= clashed and field == "comments"
+            if value is not None:
+                current[field] = value
+        if comment_clash:
+            current["bookmarked"] = True   # so the Bookmarked filter finds them
+            clashes += 1
         merged[steno] = current
     save_metadata(dictionary_path, merged)
-    return True
+    _write_delivered(dictionary_path, stamp, delivered)
+    return clashes
 
 
 # ------------------------------------------------------------

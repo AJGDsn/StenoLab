@@ -17,7 +17,12 @@ from ui.missing_frequency_dialog import (
 
 # Logic
 from logic.dictionary_loader import load_dictionary_with_metadata
-from logic.metadata_store import METADATA_ROOT, save_metadata
+from logic.metadata_store import (
+    DELIVERED_COMMENT_MARK,
+    METADATA_ROOT,
+    import_sidecar_metadata,
+    save_metadata,
+)
 from logic.settings_store import load_settings, save_settings
 from logic.frequency_importer import (
     DEFAULT_UK_FREQUENCY_URL,
@@ -702,16 +707,11 @@ class StenoApp(tk.Tk):
             self.notebook.select(self.tabs[tab_key])
             return
 
-        try:
-            entries, metadata, _ = load_dictionary_with_metadata(path)
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load dictionary:\n{e}")
-            return
-
         # Take an open-time backup so the user has a snapshot of the file as
         # it was when they started working today.  Done once per path per
         # session — reopening the same file later in the session won't
-        # produce a redundant backup.
+        # produce a redundant backup.  Taken before delivered metadata is
+        # merged in, so the merge can be rolled back too.
         if path not in self._backed_up_this_session:
             try:
                 from logic.backup_store import backup_dictionary
@@ -719,6 +719,16 @@ class StenoApp(tk.Tk):
             except Exception:
                 pass  # never let a backup failure block opening
             self._backed_up_this_session.add(path)
+
+        try:
+            clashes = import_sidecar_metadata(path)
+        except Exception:
+            clashes = None  # the loader tries again and reports real errors
+        try:
+            entries, metadata, _ = load_dictionary_with_metadata(path)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load dictionary:\n{e}")
+            return
 
         base = os.path.basename(path)
         name, _ = os.path.splitext(base)
@@ -759,6 +769,17 @@ class StenoApp(tk.Tk):
             active=name
         )
         self._refresh_unsaved_status()
+
+        if clashes:
+            noun = "comment" if clashes == 1 else "comments"
+            self.after_idle(lambda: messagebox.showinfo(
+                "Delivered Metadata",
+                f"New metadata was delivered with {base}. {clashes} {noun} you "
+                f"had edited were also changed in the delivery, so both "
+                f"versions were kept.\n\nThe delivered text follows yours, "
+                f"marked {DELIVERED_COMMENT_MARK}, and those entries are "
+                f"bookmarked: tick the Bookmarked filter to find them.",
+            ))
 
     # ------------------------------------------------------------
     # Save Dictionary

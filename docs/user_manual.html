@@ -794,7 +794,14 @@ hr{border:none;border-top:1px solid var(--border);margin:2em 0;}
 <p>If a metadata file is missing or unreadable, StenoLab builds a fresh one in memory using today's date for both Added and Modified fields. There is no harm in deleting metadata files; it just means history information for that dictionary is lost.</p>
 <h2 id="metadata-delivered-with-a-dictionary">Metadata delivered with a dictionary</h2>
 <p>A tool that builds a dictionary can deliver metadata with it, in the same format, as a file named after the dictionary with <code>.stenolab-meta.json</code> at the end, in the same folder. For example, <code>Ian-rationalised.json</code> and <code>Ian-rationalised.stenolab-meta.json</code>.</p>
-<p>When you open the dictionary, StenoLab merges that file into its own metadata if it has none for the dictionary yet, or if the delivered file is newer. So a rebuilt delivery comes through, but opening the dictionary again doesn't undo your own changes. The delivered values (comments, brief flags and so on) take precedence, except blank dates, which never replace dates StenoLab already has. Open the dictionary itself, not the <code>.stenolab-meta.json</code> file; StenoLab explains if you pick that one by mistake.</p>
+<p>When you open the dictionary, StenoLab merges that file into its own metadata. It keeps a copy of each delivery it merges, so when a rebuilt delivery arrives it applies only what the rebuild actually changed:</p>
+<ul>
+<li>A comment, brief flag or other value you haven't changed in StenoLab takes the delivered value.</li>
+<li>A value you have changed stays as you left it, unless the rebuild changed it too.</li>
+<li>If you and the rebuild both changed the same comment, both are kept: the delivered text is added after yours, starting with <strong>[Delivered]</strong>, and the entry is bookmarked. StenoLab tells you how many there are; tick the Bookmarked filter to find and tidy them.</li>
+<li>Blank delivered dates never replace dates StenoLab already has.</li>
+</ul>
+<p>Opening the dictionary again with the same delivery changes nothing. The open-time backup is taken before the merge, so Tools → Restore Backup can undo it. Open the dictionary itself, not the <code>.stenolab-meta.json</code> file; StenoLab explains if you pick that one by mistake.</p>
 <h2 id="backup-files">Backup files</h2>
 <p>StenoLab automatically backs up dictionaries so a previous version is always recoverable. Backups are stored as timestamped copies of the dictionary file together with its metadata sidecar. RTF dictionaries are backed up with an .rtf extension.</p>
 <p>Location:</p>
