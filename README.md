@@ -1,15 +1,17 @@
 # StenoLab
 
-A desktop editor for steno dictionaries. StenoLab opens Plover JSON and RTF/CRE dictionaries, lets you search, filter, edit and annotate them, and keeps large dictionaries (300,000+ entries) quick to work with. It is for curating dictionaries — building, cleaning up and comparing them — not for writing steno.
+A desktop editor for steno dictionaries that lets you attach your own notes to every entry while the dictionary stays a plain Plover JSON or RTF/CRE file. Comments, brief flags, dates and word-frequency scores live in a separate file that StenoLab keeps alongside the dictionary, so Plover, CAT software and anything else that reads the dictionary see exactly the file they expect.
+
+StenoLab lets you search, filter, edit and annotate dictionaries, and keeps large ones (300,000+ entries) quick to work with. It is for curating dictionaries — building, cleaning up and comparing them — not for writing steno.
 
 A companion **[iPad viewer](https://ajgdsn.github.io/StenoLab/)** lets you search and compare dictionaries, with your comments, away from the computer.
 
 ## Features
 
+- **Metadata without changing the dictionary.** Give any entry a comment, a brief flag and a frequency score; StenoLab records when entries were added and changed. All of it is stored in StenoLab's own file, matched to the dictionary, and never written into the dictionary itself, so the dictionary stays fully Plover-compatible and you can keep using it in Plover as you edit. Metadata saves together with the dictionary, is included in backups, and can be filtered and sorted on like any other column. Other tools can deliver metadata with a dictionary too (see "For developers").
 - **Plover JSON and RTF/CRE.** Open either format and save in the same one. RTF formatting is shown in Plover syntax (`{^ing}`, `{.}`, `{-|}`) and converted back on save; anything else is kept unchanged. Tools → Convert Dictionary converts between the two.
 - **Fast with big dictionaries.** The table shows every entry at once, with no paging. On a 370,000-entry dictionary, searching responds within about 50 ms and an edit within about a second.
 - **Search and filter.** Search translations and steno with Begins With, Contains or Ends With, optionally as whole strokes. Filter by comments, brief flag, bookmark, conflicts, capitals, numbers, punctuation and word frequency.
-- **Comments and other metadata.** Each entry can have a comment, a brief flag and a frequency score, kept in a separate file so the dictionary itself stays clean. Metadata saves together with the dictionary.
 - **Several dictionaries side by side.** Each opens in its own tab. Select a word and switch tabs to see how another dictionary writes it. Copy or move entries between tabs.
 - **Conflicts.** Duplicate steno keys are kept rather than silently dropped, and highlighted so they can be resolved.
 - **Undo any edit.** Adding, editing, deleting, copying or moving entries and Find & Replace across the whole dictionary can all be undone.
