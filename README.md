@@ -1,6 +1,6 @@
 # StenoLab
 
-A desktop editor for steno dictionaries that lets you attach your own notes to every entry while the dictionary stays a plain Plover JSON or RTF/CRE file. Comments, brief flags, dates and word-frequency scores live in a separate file that StenoLab keeps alongside the dictionary, so Plover, CAT software and anything else that reads the dictionary see exactly the file they expect.
+A desktop editor for steno dictionaries that lets you attach your own notes to every entry while the dictionary stays a plain Plover JSON or RTF/CRE file. Comments, brief flags, dates and word-frequency scores live in a separate file in StenoLab's own data folder, matched to the dictionary, so Plover, CAT software and anything else that reads the dictionary see exactly the file they expect.
 
 StenoLab lets you search, filter, edit and annotate dictionaries, and keeps large ones (300,000+ entries) quick to work with. It is for curating dictionaries — building, cleaning up and comparing them — not for writing steno.
 
