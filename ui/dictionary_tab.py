@@ -1103,15 +1103,20 @@ class DictionaryTab(ttk.Frame):
         if not (0 <= row < len(self.filtered_entries)):
             return
         self.sheet.dehighlight_rows([row], redraw=False)
+
+        def among(rows):   # the row lists are sorted, so search, don't scan
+            i = bisect.bisect_left(rows, row)
+            return i < len(rows) and rows[i] == row
+
         if row == self._current_row:
             bg, fg = C["accent_soft"], C["fg"]
-        elif row in self._find_rows:
+        elif among(self._find_rows):
             bg, fg = C["find_match_bg"], C["find_match_fg"]
-        elif row in self._both_rows:
+        elif among(self._both_rows):
             bg, fg = C["bookmarked_conflict_bg"], C["bookmarked_conflict_fg"]
-        elif row in self._cf_rows:
+        elif among(self._cf_rows):
             bg, fg = C["conflict_bg"], C["conflict_fg"]
-        elif row in self._bm_rows:
+        elif among(self._bm_rows):
             bg, fg = C["bookmark_bg"], C["bookmark_fg"]
         else:
             return
@@ -1516,7 +1521,8 @@ class DictionaryTab(ttk.Frame):
         if not hasattr(self, "sheet"):
             return None
         selected = self.sheet.get_currently_selected()
-        if not selected:
+        # A header click (which sorts) selects a whole column: no word.
+        if not selected or selected.type_ == "columns":
             return None
         entry = self._entry_for_row(selected.row)
         if entry is None:
@@ -1539,7 +1545,11 @@ class DictionaryTab(ttk.Frame):
         """
         field, text, whole_row = target
         needle = text.lower()
-        values = [(e.get(field) or "").strip().lower() for e in self.filtered_entries]
+        if field == "english" and len(self.filtered_entries) == len(self._entries_in_sort_order()):
+            # Nothing filtered out: the cached lowered translations line up.
+            values = self._lowered_texts()
+        else:
+            values = [(e.get(field) or "").strip().lower() for e in self.filtered_entries]
         try:
             row = values.index(needle)
         except ValueError:

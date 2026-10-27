@@ -1167,10 +1167,13 @@ class StenoApp(tk.Tk):
         if focus is not None:
             try:
                 cls = focus.winfo_class()
-            except tk.TclError:
-                cls = None
-            if cls in ("Entry", "TEntry", "Text", "TCombobox",
-                       "Spinbox", "Listbox", "Menu"):
+                # bind_all also sees keys typed in dialogs; those belong
+                # to the dialog, not the main window's search.
+                in_dialog = focus.winfo_toplevel() is not self
+            except (tk.TclError, KeyError):
+                cls, in_dialog = None, False
+            if in_dialog or cls in ("Entry", "TEntry", "Text", "TCombobox",
+                                    "Spinbox", "Listbox", "Menu"):
                 return None
 
         keysym = event.keysym

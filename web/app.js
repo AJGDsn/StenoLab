@@ -107,15 +107,17 @@
   // Row indices in the current sort order (built once per sort).
   function sortedIndices(dict) {
     const { col, dir } = state.sort;
-    const key = `order${col}`;
-    if (!dict.cache[key]) {
+    const asc = `order${col}`;
+    if (!dict.cache[asc]) {
       const text = columnText(dict, col);
       const order = dict.rows.map((_, i) => i);
       order.sort((a, b) => (text[a] < text[b] ? -1 : text[a] > text[b] ? 1 : a - b));
-      dict.cache[key] = order;
+      dict.cache[asc] = order;
     }
-    const order = dict.cache[key];
-    return dir === "asc" ? order : order.slice().reverse();
+    if (dir === "asc") return dict.cache[asc];
+    const desc = `${asc}desc`;
+    if (!dict.cache[desc]) dict.cache[desc] = dict.cache[asc].slice().reverse();
+    return dict.cache[desc];
   }
 
   // ---------------------------------------------------------------------
@@ -327,6 +329,9 @@
     $("remove-text").textContent =
       `Remove ${dict.name} from this iPad? The file in Files is not affected; you can open it again any time.`;
     const dialog = $("remove-confirm");
+    // Escape closes without setting returnValue, so clear the last answer
+    // first: otherwise a previous "remove" would count as this one's.
+    dialog.returnValue = "";
     dialog.onclose = async () => {
       if (dialog.returnValue !== "remove") return;
       await deleteDict(dict.id);
@@ -378,7 +383,8 @@
         group.append(none);
       }
       const order = columnText(dict, col === 1 ? 0 : 1);
-      hits.sort((a, b) => (text[a] < text[b] ? -1 : text[a] > text[b] ? 1 : order[a] < order[b] ? -1 : 1));
+      hits.sort((a, b) => (text[a] < text[b] ? -1 : text[a] > text[b] ? 1
+                           : order[a] < order[b] ? -1 : order[a] > order[b] ? 1 : a - b));
       for (const i of hits.slice(0, MAX_COMPARE_HITS)) {
         const [steno, english, comment] = dict.rows[i];
         const hit = document.createElement("div");
@@ -413,9 +419,17 @@
     for (const file of files) {
       try {
         const dict = await readDictionaryFile(file);
-        // Re-opening a file replaces the stored copy of the same name.
+        // Re-opening a file usually means an updated copy, so it replaces
+        // the stored one of the same name.  The Files picker gives no
+        // folder, so a different file that shares the name is told apart
+        // only by asking.
         const existing = state.dicts.find((d) => d.source === dict.source);
-        if (existing) {
+        if (existing && !confirm(
+          `${dict.source} is already on this iPad.\n\nOK replaces it with this file. ` +
+          "Cancel keeps both.")) {
+          dict.name = uniqueName(dict.name);
+          state.dicts.push(dict);
+        } else if (existing) {
           dict.id = existing.id;
           dict.added = existing.added;
           state.dicts = state.dicts.map((d) => (d.id === existing.id ? dict : d));
@@ -430,6 +444,13 @@
     }
     if (lastId) activate(lastId);
     if (failures.length) alert(`Could not open:\n\n${failures.join("\n")}`);
+  }
+
+  function uniqueName(name) {
+    const taken = new Set(state.dicts.map((d) => d.name));
+    let n = 2;
+    while (taken.has(`${name} (${n})`)) n++;
+    return `${name} (${n})`;
   }
 
   // ---------------------------------------------------------------------

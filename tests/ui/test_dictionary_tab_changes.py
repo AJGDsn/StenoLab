@@ -408,6 +408,22 @@ def test_follow_matches_translation_or_steno_by_selected_cell(root, tmp_path):
     assert selected(target)[:2] == ("KA*T", "rows"), "a whole row matches by translation"
 
 
+def test_a_column_selection_from_sorting_is_not_followed(root, tmp_path):
+    tab = make_tab(root, tmp_path, [("KAT", "cat"), ("TKOG", "dog")])
+    tab.sheet.select_column(tab.column_order.index("english"))
+    assert tab.follow_target() is None
+
+
+def test_follow_uses_cached_translations_when_nothing_is_filtered(root, tmp_path):
+    source = make_tab(root, tmp_path, [("KAT", "Dogs")])
+    other_dir = tmp_path / "other"
+    other_dir.mkdir()
+    target = make_tab(root, other_dir, [("TKOG", " DOGS "), ("KAT", "cat")])
+    select_cell(source, source.entries[0], "english")
+    assert target.follow(source.follow_target())
+    assert selected(target)[0] == "TKOG"
+
+
 def test_follow_searches_only_visible_rows_and_leaves_state_when_unmatched(root, tmp_path):
     source = make_tab(root, tmp_path, [("KAT", "cat")])
     other_dir = tmp_path / "other"
